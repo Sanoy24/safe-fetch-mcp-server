@@ -1,0 +1,33 @@
+# Configuration for agent-audit-kit (https://github.com/sattyamjjain/agent-audit-kit),
+# run per Milestone 5 (external scanner validation) of the project roadmap.
+# See SECURITY.md for the full scan write-up and rationale for each entry below.
+
+# AAK-ANTHROPIC-SDK-001 (STDIO sanitizer): this rule targets MCP servers that build
+# argv/shell commands from tool input without sanitizing them. This server has no
+# such surface at all — grep the src/ tree for child_process, execFile, spawn, or
+# exec: there are none. fetch_url performs exactly one operation, an HTTP(S) fetch
+# through the hardened security/ guard; it never executes a command. The rule fires
+# purely because StdioServerTransport is used, which this server must do to be an
+# MCP server at all.
+accepts_stdio_risk: true
+justification: >
+  No OS command execution or subprocess spawning exists anywhere in this
+  repository (verified: no child_process/execFile/spawn/exec usage in src/).
+  fetch_url's only side effect is an HTTP(S) fetch through the hardened
+  security/ guard (see .claude/skills/secure-fetch-ssrf/SKILL.md). The
+  command-injection-via-unsanitized-argv risk this rule targets has no
+  applicable surface in this codebase.
+
+# AAK-AGENT-002 / AAK-AGENT-003: both are keyword-matching false positives against
+# CLAUDE.md's own defensive security documentation, not real findings.
+#   - AAK-AGENT-002 flags CLAUDE.md:91 for containing the string
+#     "http://169.254.169.254/" — that line is test-writing guidance telling
+#     contributors to write a test proving THIS EXACT ADDRESS IS REFUSED. It is the
+#     threat being defended against, not a live callback/C2 URL.
+#   - AAK-AGENT-003 flags CLAUDE.md:9 for containing the word "bypassed" — the full
+#     sentence is "a poller that re-fetched a URL and bypassed the guard applied on
+#     first load", describing the real 2026 CVE this project's single-fetch-path
+#     design defends against, not an instruction to bypass anything.
+# Removing this language to satisfy a keyword matcher would make the security
+# documentation worse, not better.
+exclude-rules: AAK-AGENT-002, AAK-AGENT-003

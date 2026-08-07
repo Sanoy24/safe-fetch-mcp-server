@@ -13,6 +13,8 @@ async function startStdio(): Promise<void> {
 }
 
 async function startHttp(): Promise<void> {
+  // The rate limiter for the /mcp endpoint lives inside createHttpApp
+  // (httpApp.ts), not here — see SAFE_FETCH_RATE_LIMIT_MAX/_WINDOW_MS.
   const httpConfig = loadHttpConfig();
   const app = createHttpApp(httpConfig);
 

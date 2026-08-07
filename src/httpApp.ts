@@ -1,10 +1,12 @@
 import type { Express } from "express";
+import { rateLimit } from "express-rate-limit";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { createServer } from "./server.js";
 import type { HttpTransportConfig } from "./config.js";
 
 const CORS_ALLOWED_HEADERS = "Content-Type, Accept, Mcp-Protocol-Version";
+const LOCALHOST_HOSTNAMES = ["127.0.0.1", "localhost", "[::1]"];
 
 /**
  * Builds the Express app for Streamable HTTP mode, without binding a port.
@@ -12,11 +14,34 @@ const CORS_ALLOWED_HEADERS = "Content-Type, Accept, Mcp-Protocol-Version";
  * index.ts itself would trigger its top-level main()/process.exit side effects.
  */
 export function createHttpApp(httpConfig: HttpTransportConfig): Express {
-  // Host-header DNS-rebinding protection is handled by createMcpExpressApp itself
-  // (auto-enabled for 127.0.0.1/localhost/::1, the default). Origin validation is a
-  // separate concern the SDK doesn't cover, so it's added below.
-  const app = createMcpExpressApp({ host: httpConfig.host });
+  // Host-header DNS-rebinding protection (CVE-2025-66414/66416,
+  // CVE-2026-35568/35577 class): passed explicitly rather than relying on
+  // createMcpExpressApp's implicit host-based auto-detection, so the allow-list
+  // stays in force even if HOST is ever pointed at something other than the
+  // localhost default.
+  const allowedHosts = LOCALHOST_HOSTNAMES.includes(httpConfig.host)
+    ? LOCALHOST_HOSTNAMES
+    : [httpConfig.host, ...LOCALHOST_HOSTNAMES];
+  const app = createMcpExpressApp({ host: httpConfig.host, allowedHosts });
 
+  app.use(
+    rateLimit({
+      windowMs: httpConfig.rateLimitWindowMs,
+      limit: httpConfig.rateLimitMax,
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: (_req, res) => {
+        res.status(429).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Too many requests." },
+          id: null
+        });
+      }
+    })
+  );
+
+  // Origin validation is a separate DNS-rebinding-adjacent concern the SDK
+  // doesn't cover on its own.
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin === undefined) {

@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { FetchUrlInput, runFetchUrl } from "./tools/fetchUrl.js";
 
+// This factory is shared by both transports. Over HTTP, requests reaching it
+// have already passed the rate limiter in httpApp.ts; stdio has no network
+// exposure and needs none.
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "safe-fetch-mcp-server",

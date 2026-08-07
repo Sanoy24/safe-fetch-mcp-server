@@ -7,7 +7,14 @@ import { createHttpApp } from "../src/httpApp.js";
 import type { HttpTransportConfig } from "../src/config.js";
 
 function testHttpConfig(overrides: Partial<HttpTransportConfig> = {}): HttpTransportConfig {
-  return { host: "127.0.0.1", port: 0, allowedOrigins: [], ...overrides };
+  return {
+    host: "127.0.0.1",
+    port: 0,
+    allowedOrigins: [],
+    rateLimitMax: 1000,
+    rateLimitWindowMs: 60_000,
+    ...overrides
+  };
 }
 
 describe("Streamable HTTP transport", () => {
@@ -145,5 +152,34 @@ describe("CORS for an explicitly allowed origin", () => {
       body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 })
     });
     expect(response.status).not.toBe(403);
+  });
+});
+
+describe("Rate limiting", () => {
+  let rateLimitedServer: http.Server;
+  let rateLimitedBaseUrl: string;
+
+  beforeAll(async () => {
+    const app = createHttpApp(testHttpConfig({ rateLimitMax: 2, rateLimitWindowMs: 60_000 }));
+    rateLimitedServer = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => rateLimitedServer.once("listening", resolve));
+    const port = (rateLimitedServer.address() as AddressInfo).port;
+    rateLimitedBaseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => rateLimitedServer.close(() => resolve()));
+  });
+
+  it("returns 429 once a client exceeds the configured limit", async () => {
+    const get = (): Promise<Response> => fetch(`${rateLimitedBaseUrl}/mcp`, { method: "GET" });
+
+    const first = await get();
+    const second = await get();
+    const third = await get();
+
+    expect(first.status).toBe(405); // within limit, hits the real method-not-allowed handler
+    expect(second.status).toBe(405);
+    expect(third.status).toBe(429); // 3rd request exceeds the limit of 2
   });
 });

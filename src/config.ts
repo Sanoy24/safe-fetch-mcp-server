@@ -54,12 +54,17 @@ export interface HttpTransportConfig {
    * validation is handled separately by the SDK's createMcpExpressApp().
    */
   readonly allowedOrigins: readonly string[];
+  /** Requests allowed per window, per client IP. */
+  readonly rateLimitMax: number;
+  readonly rateLimitWindowMs: number;
 }
 
 export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpTransportConfig {
   return {
     host: env["HOST"] ?? "127.0.0.1",
     port: parsePort(env["PORT"], 3000),
-    allowedOrigins: parseAllowlist(env["SAFE_FETCH_ALLOWED_ORIGINS"])
+    allowedOrigins: parseAllowlist(env["SAFE_FETCH_ALLOWED_ORIGINS"]),
+    rateLimitMax: parseIntEnv(env["SAFE_FETCH_RATE_LIMIT_MAX"], 60),
+    rateLimitWindowMs: parseIntEnv(env["SAFE_FETCH_RATE_LIMIT_WINDOW_MS"], 60_000)
   };
 }
