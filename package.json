@@ -17,6 +17,7 @@
         "build": "tsc",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
+        "start:http": "node dist/index.js --http",
         "test": "vitest run",
         "test:watch": "vitest",
         "lint": "eslint .",

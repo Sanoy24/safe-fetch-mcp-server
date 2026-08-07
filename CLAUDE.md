@@ -78,7 +78,8 @@ npm install            # install deps (verify SDK version on first run)
 npm run build          # tsc → dist/
 npm run dev            # watch mode
 npm start              # run compiled server (stdio)
-TRANSPORT=http npm start   # run over Streamable HTTP
+npm run start:http     # run over Streamable HTTP (127.0.0.1:3000/mcp)
+TRANSPORT=http npm start   # equivalent, POSIX shells only (not PowerShell/cmd.exe)
 npm test               # vitest — all SSRF specs must pass
 npm run lint           # eslint
 npm run format         # prettier
