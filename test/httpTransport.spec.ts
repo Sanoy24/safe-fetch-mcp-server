@@ -93,3 +93,57 @@ describe("Streamable HTTP transport", () => {
     expect(deleteRes.status).toBe(405);
   });
 });
+
+describe("CORS for an explicitly allowed origin", () => {
+  let corsServer: http.Server;
+  let corsBaseUrl: string;
+
+  beforeAll(async () => {
+    const app = createHttpApp(testHttpConfig({ allowedOrigins: ["https://trusted.example"] }));
+    corsServer = app.listen(0, "127.0.0.1");
+    await new Promise<void>((resolve) => corsServer.once("listening", resolve));
+    const port = (corsServer.address() as AddressInfo).port;
+    corsBaseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => corsServer.close(() => resolve()));
+  });
+
+  it("answers an OPTIONS preflight with the right CORS headers", async () => {
+    const response = await fetch(`${corsBaseUrl}/mcp`, {
+      method: "OPTIONS",
+      headers: { origin: "https://trusted.example" }
+    });
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://trusted.example");
+    expect(response.headers.get("access-control-allow-methods")).toContain("POST");
+  });
+
+  it("sets Access-Control-Allow-Origin on the actual POST response, not just the preflight", async () => {
+    const response = await fetch(`${corsBaseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        origin: "https://trusted.example"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 })
+    });
+    expect(response.status).not.toBe(403);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://trusted.example");
+  });
+
+  it("matches an allowed origin case-insensitively", async () => {
+    const response = await fetch(`${corsBaseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        origin: "HTTPS://TRUSTED.EXAMPLE"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 })
+    });
+    expect(response.status).not.toBe(403);
+  });
+});

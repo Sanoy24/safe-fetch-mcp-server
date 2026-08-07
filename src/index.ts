@@ -23,7 +23,13 @@ async function startHttp(): Promise<void> {
       );
       resolve();
     });
-    httpServer.on("error", reject);
+    // Logs unconditionally: reject() only affects this startup promise and becomes
+    // a safe no-op once it has settled, so without a log a post-startup error
+    // (e.g. EMFILE during accept()) would otherwise vanish silently.
+    httpServer.on("error", (err) => {
+      console.error("HTTP server error:", err);
+      reject(err);
+    });
   });
 }
 

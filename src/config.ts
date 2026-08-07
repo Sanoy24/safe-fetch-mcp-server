@@ -17,6 +17,12 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parsePort(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 65535 ? parsed : fallback;
+}
+
 function parseAllowlist(value: string | undefined): readonly string[] {
   if (!value) return [];
   return value
@@ -53,7 +59,7 @@ export interface HttpTransportConfig {
 export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpTransportConfig {
   return {
     host: env["HOST"] ?? "127.0.0.1",
-    port: parseIntEnv(env["PORT"], 3000),
+    port: parsePort(env["PORT"], 3000),
     allowedOrigins: parseAllowlist(env["SAFE_FETCH_ALLOWED_ORIGINS"])
   };
 }
