@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-08-11
+
+### Fixed
+
+- `mcpName` / `server.json` `name`: corrected the GitHub-namespace casing to
+  `io.github.Sanoy24/safe-fetch` — the MCP Registry requires an exact
+  case-sensitive match to the authenticated GitHub username, and `sanoy24`
+  (lowercase) was rejected with a 403.
+
 ## [0.1.2] - 2026-08-11
 
 ### Added
@@ -55,6 +64,7 @@ this project follows [Semantic Versioning](https://semver.org/).
 - External validation via [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit):
   13 findings → 2, zero critical/high remaining. See `SECURITY.md`.
 
+[0.1.3]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.3
 [0.1.2]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.2
 [0.1.1]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.0
