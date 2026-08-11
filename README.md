@@ -1,14 +1,15 @@
 # safe-fetch-mcp-server
 
+[![npm version](https://img.shields.io/npm/v/safe-fetch-mcp-server.svg)](https://www.npmjs.com/package/safe-fetch-mcp-server)
+[![CI](https://github.com/Sanoy24/safe-fetch-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Sanoy24/safe-fetch-mcp-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/safe-fetch-mcp-server.svg)](LICENSE)
+[![Node](https://img.shields.io/node/v/safe-fetch-mcp-server.svg)](package.json)
+
 An MCP server that fetches web content for an agent and is **correct and secure**
 where the popular fetch servers are not. Not "has SSRF protection" — everyone
 claims that — but *provably correct* against the edge cases that produced real
 2026 CVEs in other fetch servers, verified against the OWASP MCP Top 10 and an
 independent scanner. See [`SECURITY.md`](SECURITY.md) for the full evidence trail.
-
-> **Status:** pre-publish (v0.1.0, not yet on npm). Clone and build locally for
-> now — see [Development](#development) below. The `npx` config below is the
-> target end-state and will work once published.
 
 ## Why
 
@@ -69,30 +70,25 @@ This domain is for use in documentation examples without needing permission.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A[Agent / MCP client] -->|fetch_url| B[safe-fetch-mcp-server]
-    subgraph Server
-      B --> C[Zod input validation]
-      C --> D[urlPolicy: scheme + userinfo]
-      D --> E[resolveAndPin: DNS resolve once,<br/>validate resolved IP, pin connection]
-      E --> F{Blocked range?}
-      F -- yes --> G[Refuse: actionable error]
-      F -- no --> H[Pinned request to resolved IP]
-      H --> I[Redirect? Re-run full guard on Location]
-      I --> H
-      H --> J[Byte cap + timeouts]
-      J --> K[HTML → clean markdown]
-      K --> L[Frame as untrusted data]
-    end
-    G --> A
-    L --> A
-```
-
-Every outbound request — including every redirect hop — goes through the
-**same** guard in `src/security/`. There is deliberately no second fetch path;
+Every outbound request — including every redirect hop — goes through the exact
+same pipeline in `src/security/`. There is deliberately no second fetch path;
 that exact gap (a guard applied on first load but skipped by a recurring
 poller) was a real 2026 CVE.
+
+1. **Zod validation** rejects malformed input immediately.
+2. **`urlPolicy`** enforces the scheme allowlist (`http`/`https` only) and
+   rejects embedded userinfo (`user:pass@host`).
+3. **`resolveAndPin`** resolves the hostname once, validates *every* resolved
+   IP against explicit blocked ranges, then pins the connection to that exact
+   IP — this is what defeats DNS rebinding.
+4. **Blocked?** → refuse with an actionable error, never a stack trace.
+   **Clear?** → connect to the pinned IP.
+5. **Redirect received?** → step 2 runs again on the `Location` header, from
+   scratch, through the same code path as the original request — not a
+   separate one.
+6. **Final response** → byte cap and timeouts are enforced, HTML is converted
+   to clean markdown, and the result is explicitly framed as untrusted data
+   before it reaches the agent.
 
 ## SSRF threat matrix
 

@@ -1,6 +1,6 @@
 {
   "name": "safe-fetch-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A secure-by-default MCP server for fetching web content: SSRF, DNS-rebinding, and redirect-to-internal protection with post-resolution IP validation.",
   "type": "module",
   "bin": {

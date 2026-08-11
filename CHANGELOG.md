@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-08-11
+
+### Fixed
+
+- README: removed a stale "pre-publish, not yet on npm" status note that was
+  wrong as soon as 0.1.0 published, and replaced the Mermaid architecture
+  diagram (unrendered raw syntax on the npm registry page — npm's README
+  renderer doesn't support Mermaid, unlike GitHub) with a plain numbered
+  pipeline description that renders correctly everywhere.
+- README: added npm version / CI / license / Node engines badges now that the
+  repository is public and links resolve.
+
 ## [0.1.0] - 2026-08-11
 
 ### Added
@@ -35,4 +47,5 @@ this project follows [Semantic Versioning](https://semver.org/).
 - External validation via [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit):
   13 findings → 2, zero critical/high remaining. See `SECURITY.md`.
 
+[0.1.1]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.0
