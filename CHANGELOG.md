@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-08-11
+
+### Added
+
+- `server.json` and `mcpName` (`io.github.sanoy24/safe-fetch`) for submission
+  to the official [MCP Registry](https://registry.modelcontextprotocol.io).
+  No functional changes.
+
 ## [0.1.1] - 2026-08-11
 
 ### Fixed
@@ -47,5 +55,6 @@ this project follows [Semantic Versioning](https://semver.org/).
 - External validation via [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit):
   13 findings → 2, zero critical/high remaining. See `SECURITY.md`.
 
+[0.1.2]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.2
 [0.1.1]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.1
 [0.1.0]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.0
