@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -46,6 +47,19 @@ describe("Streamable HTTP transport", () => {
     const client = await connectClient();
     const tools = await client.listTools();
     expect(tools.tools.map((t) => t.name)).toContain("fetch_url");
+    await client.close();
+  });
+
+  it("reports the package version and advertises an outputSchema", async () => {
+    const { version } = createRequire(import.meta.url)("../package.json") as {
+      version: string;
+    };
+    const client = await connectClient();
+
+    expect(client.getServerVersion()?.version).toBe(version);
+    const tool = (await client.listTools()).tools.find((t) => t.name === "fetch_url");
+    expect(tool?.outputSchema?.properties).toHaveProperty("nextStartIndex");
+    expect(tool?.outputSchema?.properties).toHaveProperty("error");
     await client.close();
   });
 

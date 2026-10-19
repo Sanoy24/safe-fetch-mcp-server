@@ -1,4 +1,4 @@
-import { config as defaultConfig, type SafeFetchConfig } from "../config.js";
+import { getConfig, type SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, ResolutionError } from "./resolveAndPin.js";
 import {
@@ -9,6 +9,12 @@ import {
 } from "./redirects.js";
 
 export { UrlPolicyError, ResolutionError, SafeFetchError };
+export {
+  GuardError,
+  isRetryable,
+  FETCH_ERROR_CODES,
+  type FetchErrorCode
+} from "./errors.js";
 export type { SafeFetchResult, SafeFetchConfig, SafeFetchOptions };
 
 /**
@@ -18,7 +24,7 @@ export type { SafeFetchResult, SafeFetchConfig, SafeFetchOptions };
  */
 export async function assertSafeUrl(
   rawUrl: string,
-  cfg: SafeFetchConfig = defaultConfig
+  cfg: SafeFetchConfig = getConfig()
 ): Promise<URL> {
   const url = parseAndValidateUrl(rawUrl, cfg.allowlist);
   await resolveAndPin(url.hostname, cfg.allowLocal);
@@ -31,7 +37,7 @@ export async function assertSafeUrl(
  */
 export async function safeFetch(
   rawUrl: string,
-  cfg: SafeFetchConfig = defaultConfig,
+  cfg: SafeFetchConfig = getConfig(),
   options: SafeFetchOptions = {}
 ): Promise<SafeFetchResult> {
   return fetchWithRedirects(rawUrl, cfg, options);
