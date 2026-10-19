@@ -35,8 +35,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
-      - name: Verify package contents
-        run: npm pack --dry-run
+      - run: npm run release:check
+      - name: Clean-install smoke test (packed tarball over stdio)
+        run: node scripts/smoke-pack.mjs
 
   audit:
     runs-on: ubuntu-latest
