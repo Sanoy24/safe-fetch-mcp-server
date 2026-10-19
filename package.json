@@ -67,7 +67,7 @@
     "prettier": "^3.3.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^5.0.5"
   },
   "//": "@modelcontextprotocol/sdk is pinned >=1.30.0 deliberately: 1.21.1 is the first version with the DNS-rebinding fix (CVE-2025-66414/66416). Re-verify this floor periodically."
 }
