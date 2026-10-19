@@ -179,7 +179,7 @@ Nothing silently falls back to a default.
 ## Development
 
 ```bash
-git clone https://github.com/sanoy24/safe-fetch-mcp-server.git
+git clone https://github.com/Sanoy24/safe-fetch-mcp-server.git
 cd safe-fetch-mcp-server
 npm ci
 npm run check          # format, lint, typecheck, build, test (what CI runs)

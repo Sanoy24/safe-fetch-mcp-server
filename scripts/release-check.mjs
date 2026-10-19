@@ -53,6 +53,16 @@ expect(
 );
 expect(section !== null, `CHANGELOG.md has no "## [${version}]" section`);
 
+// npm provenance compares repository.url to the GitHub repo case-sensitively
+// (Sanoy24 != sanoy24), and the MCP Registry does the same for server.json.
+const repoUrl = String(pkg.repository?.url ?? "")
+  .replace(/^git\+/, "")
+  .replace(/\.git$/, "");
+expect(
+  repoUrl === server.repository?.url,
+  `package.json repository.url ${repoUrl} != server.json repository.url ${server.repository?.url}`
+);
+
 const tagIndex = args.indexOf("--tag");
 if (tagIndex !== -1) {
   const tag = args[tagIndex + 1];
