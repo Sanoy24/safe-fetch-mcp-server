@@ -1,6 +1,13 @@
 const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 
-export class UrlPolicyError extends Error {}
+import { GuardError } from "./errors.js";
+
+/** Structural URL policy violations. Always POLICY_REJECTED. */
+export class UrlPolicyError extends GuardError {
+  constructor(message: string) {
+    super("POLICY_REJECTED", message);
+  }
+}
 
 /**
  * Structural checks that don't require DNS: scheme allowlist, userinfo rejection,

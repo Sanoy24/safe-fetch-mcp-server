@@ -3,8 +3,9 @@ import * as https from "node:https";
 import type { SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl } from "./urlPolicy.js";
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
+import { GuardError } from "./errors.js";
 
-export class SafeFetchError extends Error {}
+export class SafeFetchError extends GuardError {}
 
 export interface SafeFetchResult {
   readonly status: number;
@@ -29,7 +30,10 @@ interface RawResponse {
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 function timeoutError(cfg: SafeFetchConfig): SafeFetchError {
-  return new SafeFetchError(`Refused: request timed out after ${cfg.timeoutMs}ms.`);
+  return new SafeFetchError(
+    "TIMEOUT",
+    `Refused: request timed out after ${cfg.timeoutMs}ms.`
+  );
 }
 
 /**
@@ -134,6 +138,7 @@ function performPinnedRequest(
             signal.aborted
               ? timeoutError(cfg)
               : new SafeFetchError(
+                  "CONNECTION_FAILED",
                   `Refused: the connection to "${pinned.hostname}" failed while reading the response.`,
                   { cause: err.message }
                 )
@@ -147,6 +152,7 @@ function performPinnedRequest(
               signal.aborted
                 ? timeoutError(cfg)
                 : new SafeFetchError(
+                    "CONNECTION_FAILED",
                     "Refused: connection closed before the response completed."
                   )
             );
@@ -159,9 +165,13 @@ function performPinnedRequest(
       settleReject(
         signal.aborted
           ? timeoutError(cfg)
-          : new SafeFetchError(`Refused: could not connect to "${pinned.hostname}".`, {
-              cause: err.message
-            })
+          : new SafeFetchError(
+              "CONNECTION_FAILED",
+              `Refused: could not connect to "${pinned.hostname}".`,
+              {
+                cause: err.message
+              }
+            )
       );
     });
 
@@ -205,16 +215,25 @@ export async function fetchWithRedirects(
         const location = response.headers.location;
         if (!location) {
           throw new SafeFetchError(
+            "REDIRECT_FAILED",
             `Refused: redirect response (${response.status}) had no Location header.`
           );
         }
         redirectCount += 1;
         if (redirectCount > cfg.maxRedirects) {
           throw new SafeFetchError(
+            "REDIRECT_FAILED",
             `Refused: exceeded maximum of ${cfg.maxRedirects} redirects.`
           );
         }
-        currentUrl = new URL(location, url).toString();
+        try {
+          currentUrl = new URL(location, url).toString();
+        } catch {
+          throw new SafeFetchError(
+            "REDIRECT_FAILED",
+            "Refused: redirect response had an invalid Location header."
+          );
+        }
         continue;
       }
 

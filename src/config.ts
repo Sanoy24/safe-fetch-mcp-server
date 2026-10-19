@@ -6,42 +6,79 @@ export interface SafeFetchConfig {
   maxRedirects: number;
 }
 
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-  return value.toLowerCase() === "true";
+/** Thrown for an invalid environment variable. The message names the variable. */
+export class ConfigError extends Error {}
+
+// Invalid values fail startup instead of silently falling back to a default: a
+// typo in a security setting should be loud, not quietly "fixed".
+
+function parseBoolean(
+  name: string,
+  value: string | undefined,
+  fallback: boolean
+): boolean {
+  if (value === undefined || value.trim() === "") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  throw new ConfigError(`${name} must be "true" or "false" (got "${value}").`);
 }
 
-function parseIntEnv(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+function parseIntEnv(
+  name: string,
+  value: string | undefined,
+  fallback: number,
+  { min = 1, max = Number.MAX_SAFE_INTEGER }: { min?: number; max?: number } = {}
+): number {
+  if (value === undefined || value.trim() === "") return fallback;
+  const trimmed = value.trim();
+  const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    const range =
+      max === Number.MAX_SAFE_INTEGER
+        ? min === 1
+          ? "a positive whole number"
+          : `a whole number of at least ${min}`
+        : `a whole number between ${min} and ${max}`;
+    throw new ConfigError(`${name} must be ${range} (got "${value}").`);
+  }
+  return parsed;
 }
 
-function parsePort(value: string | undefined, fallback: number): number {
-  if (value === undefined) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= 65535 ? parsed : fallback;
-}
-
-function parseAllowlist(value: string | undefined): readonly string[] {
+function parseList(value: string | undefined): readonly string[] {
   if (!value) return [];
   return value
     .split(",")
-    .map((host) => host.trim().toLowerCase())
-    .filter((host) => host.length > 0);
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfig {
   return {
-    allowLocal: parseBoolean(env["SAFE_FETCH_ALLOW_LOCAL"], false),
-    allowlist: parseAllowlist(env["SAFE_FETCH_ALLOWLIST"]),
-    maxBytes: parseIntEnv(env["SAFE_FETCH_MAX_BYTES"], 5_000_000),
-    timeoutMs: parseIntEnv(env["SAFE_FETCH_TIMEOUT_MS"], 10_000),
-    maxRedirects: parseIntEnv(env["SAFE_FETCH_MAX_REDIRECTS"], 5)
+    allowLocal: parseBoolean(
+      "SAFE_FETCH_ALLOW_LOCAL",
+      env["SAFE_FETCH_ALLOW_LOCAL"],
+      false
+    ),
+    allowlist: parseList(env["SAFE_FETCH_ALLOWLIST"]),
+    maxBytes: parseIntEnv("SAFE_FETCH_MAX_BYTES", env["SAFE_FETCH_MAX_BYTES"], 5_000_000),
+    timeoutMs: parseIntEnv("SAFE_FETCH_TIMEOUT_MS", env["SAFE_FETCH_TIMEOUT_MS"], 10_000),
+    maxRedirects: parseIntEnv(
+      "SAFE_FETCH_MAX_REDIRECTS",
+      env["SAFE_FETCH_MAX_REDIRECTS"],
+      5,
+      { min: 0, max: 20 }
+    )
   };
 }
 
-export const config: SafeFetchConfig = loadConfig();
+let cachedConfig: SafeFetchConfig | undefined;
+
+/** Process-wide config, loaded from the environment on first use. */
+export function getConfig(): SafeFetchConfig {
+  cachedConfig ??= loadConfig();
+  return cachedConfig;
+}
 
 export interface HttpTransportConfig {
   readonly host: string;
@@ -63,10 +100,24 @@ export function loadHttpConfig(
   env: NodeJS.ProcessEnv = process.env
 ): HttpTransportConfig {
   return {
-    host: env["HOST"] ?? "127.0.0.1",
-    port: parsePort(env["PORT"], 3000),
-    allowedOrigins: parseAllowlist(env["SAFE_FETCH_ALLOWED_ORIGINS"]),
-    rateLimitMax: parseIntEnv(env["SAFE_FETCH_RATE_LIMIT_MAX"], 60),
-    rateLimitWindowMs: parseIntEnv(env["SAFE_FETCH_RATE_LIMIT_WINDOW_MS"], 60_000)
+    host: env["HOST"]?.trim() || "127.0.0.1",
+    port: parseIntEnv("PORT", env["PORT"], 3000, { max: 65_535 }),
+    allowedOrigins: parseList(env["SAFE_FETCH_ALLOWED_ORIGINS"]),
+    rateLimitMax: parseIntEnv(
+      "SAFE_FETCH_RATE_LIMIT_MAX",
+      env["SAFE_FETCH_RATE_LIMIT_MAX"],
+      60
+    ),
+    rateLimitWindowMs: parseIntEnv(
+      "SAFE_FETCH_RATE_LIMIT_WINDOW_MS",
+      env["SAFE_FETCH_RATE_LIMIT_WINDOW_MS"],
+      60_000
+    )
   };
+}
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_HOSTS.has(host.toLowerCase());
 }

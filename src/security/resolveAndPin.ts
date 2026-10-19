@@ -2,13 +2,14 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import type { LookupAddress, LookupOptions } from "node:dns";
 import type { LookupFunction } from "node:net";
 import { isBlockedIp, isAlwaysBlockedIp } from "./ipGuard.js";
+import { GuardError } from "./errors.js";
 
 /**
  * Messages are shown to the calling model, so they never include resolved
  * addresses (that would turn refusals into an internal-DNS oracle). The resolved
  * address goes in `cause`, which only the stderr audit log prints.
  */
-export class ResolutionError extends Error {}
+export class ResolutionError extends GuardError {}
 
 export interface PinnedTarget {
   readonly hostname: string;
@@ -43,19 +44,27 @@ export async function resolveAndPin(
   try {
     addresses = await resolve(hostname);
   } catch (err) {
-    throw new ResolutionError(`Refused: could not resolve host "${hostname}".`, {
-      cause: err instanceof Error ? err.message : String(err)
-    });
+    throw new ResolutionError(
+      "DNS_RESOLUTION_FAILED",
+      `Refused: could not resolve host "${hostname}".`,
+      {
+        cause: err instanceof Error ? err.message : String(err)
+      }
+    );
   }
 
   if (addresses.length === 0) {
-    throw new ResolutionError(`Refused: host "${hostname}" resolved to no addresses.`);
+    throw new ResolutionError(
+      "DNS_RESOLUTION_FAILED",
+      `Refused: host "${hostname}" resolved to no addresses.`
+    );
   }
 
   for (const addr of addresses) {
     // Link-local / cloud metadata is never bypassable, even with ALLOW_LOCAL=true.
     if (isAlwaysBlockedIp(addr.address)) {
       throw new ResolutionError(
+        "POLICY_REJECTED",
         `Refused: "${hostname}" resolves to a cloud-metadata, link-local or reserved ` +
           "address. This is never allowed, regardless of SAFE_FETCH_ALLOW_LOCAL.",
         { cause: `resolved address=${addr.address}` }
@@ -67,6 +76,7 @@ export async function resolveAndPin(
     for (const addr of addresses) {
       if (isBlockedIp(addr.address)) {
         throw new ResolutionError(
+          "POLICY_REJECTED",
           `Refused: "${hostname}" resolves to a private or non-public address. ` +
             "Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets.",
           { cause: `resolved address=${addr.address}` }
@@ -77,7 +87,10 @@ export async function resolveAndPin(
 
   const chosen = addresses[0];
   if (!chosen) {
-    throw new ResolutionError(`Refused: host "${hostname}" resolved to no addresses.`);
+    throw new ResolutionError(
+      "DNS_RESOLUTION_FAILED",
+      `Refused: host "${hostname}" resolved to no addresses.`
+    );
   }
   const pinnedIp = chosen.address;
   const family = chosen.family as 4 | 6;
