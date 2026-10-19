@@ -33,7 +33,8 @@ fetch path. If you need to fetch, call the single hardened fetch function.
    (`::ffff:127.0.0.1`).
 8. Default `SAFE_FETCH_ALLOW_LOCAL=false`. Local access is opt-in only.
 
-See `.claude/skills/secure-fetch-ssrf/SKILL.md` for the full checklist and threat matrix.
+Threat matrix: `docs/threat-model.md`. Checklist and control flow:
+`.claude/skills/secure-fetch-ssrf/SKILL.md`.
 
 ## Architecture
 
