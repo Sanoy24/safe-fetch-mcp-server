@@ -24,7 +24,34 @@ other fetch servers. The [threat model](docs/threat-model.md) maps every defense
   redirect — is genuinely hard to get right. Doing it right, and testing every
   edge case, is the whole point of this project.
 
-## Quick start
+## Install
+
+Requires **Node.js 22+**. The server runs locally through `npx`. There's nothing to build,
+and no configuration is required, because the defaults are safe.
+
+Listed on the [official MCP Registry](https://registry.modelcontextprotocol.io/) as
+[`io.github.Sanoy24/safe-fetch`](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Sanoy24%2Fsafe-fetch/versions/latest),
+on [npm](https://www.npmjs.com/package/safe-fetch-mcp-server), and on
+[Glama](https://glama.ai/mcp/servers/Sanoy24/safe-fetch-mcp-server).
+
+### Claude Code
+
+```bash
+claude mcp add safe-fetch -- npx -y safe-fetch-mcp-server
+```
+
+Add `--scope user` to make it available in every project, or `--scope project` to share it
+with your team through `.mcp.json`. Pass settings with `-e`, for example
+`-e SAFE_FETCH_ALLOWLIST=docs.python.org`. Check it with `claude mcp list`.
+
+If the server doesn't connect on native Windows, try
+`claude mcp add safe-fetch -- cmd /c npx -y safe-fetch-mcp-server`. Run that from PowerShell
+or cmd: Git Bash rewrites `/c` into a path (`C:/`) and breaks the command.
+
+### Claude Desktop
+
+Settings → Developer → **Edit Config** opens `claude_desktop_config.json`. Add the server,
+then restart Claude Desktop:
 
 ```json
 {
@@ -37,8 +64,94 @@ other fetch servers. The [threat model](docs/threat-model.md) maps every defense
 }
 ```
 
-That's the stdio config (default, for local single-user MCP clients like
-Claude Desktop). No build step, no config required — safe by default.
+### Codex (CLI and IDE extension)
+
+```bash
+codex mcp add safe-fetch -- npx -y safe-fetch-mcp-server
+```
+
+Or add it to `~/.codex/config.toml` (or `.codex/config.toml` in a trusted project):
+
+```toml
+[mcp_servers.safe-fetch]
+command = "npx"
+args = ["-y", "safe-fetch-mcp-server"]
+
+# Optional settings
+[mcp_servers.safe-fetch.env]
+SAFE_FETCH_ALLOWLIST = "docs.python.org"
+```
+
+### VS Code (GitHub Copilot agent mode)
+
+Add `.vscode/mcp.json` to your workspace. Note that VS Code uses `servers`, not `mcpServers`,
+and requires `type`:
+
+```json
+{
+  "servers": {
+    "safe-fetch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "safe-fetch-mcp-server"]
+    }
+  }
+}
+```
+
+For all workspaces, run **MCP: Open User Configuration** from the Command Palette and add
+the same entry there.
+
+### Cursor
+
+Add to `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "safe-fetch": {
+      "command": "npx",
+      "args": ["-y", "safe-fetch-mcp-server"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Open the MCP settings from the Cascade panel, or edit
+`~/.codeium/windsurf/mcp_config.json` (`%USERPROFILE%\.codeium\windsurf\mcp_config.json` on
+Windows), and add the same `mcpServers` entry as Cursor.
+
+### Other MCP clients
+
+Any client that launches stdio servers works. Use the command `npx` with the arguments
+`-y safe-fetch-mcp-server`. Clients that need a URL instead can use Streamable HTTP mode:
+`npx -y safe-fetch-mcp-server --http`, which serves `http://127.0.0.1:3000/mcp`. HTTP mode
+has no authentication, so keep it on loopback.
+
+### Settings
+
+For JSON configs, add an `env` object next to `args`:
+
+```json
+"env": { "SAFE_FETCH_ALLOWLIST": "docs.python.org,developer.mozilla.org" }
+```
+
+All settings are listed under [Configuration](#configuration). An invalid value stops the
+server with a message naming the variable. If the tool doesn't appear, check your client's
+MCP logs.
+
+### Check that it works
+
+Ask your agent to fetch `http://169.254.169.254/latest/meta-data/`. You should get a
+refusal with `POLICY_REJECTED`. To drive the tool by hand, run
+`npx @modelcontextprotocol/inspector npx -y safe-fetch-mcp-server`.
+
+The **Claude Code** setup above was verified against v0.3.0 on Windows 11 (connects with plain
+`npx`, settings passed through `-e`). CI also tests the packed package with the official MCP
+SDK client. The other snippets follow each client's documentation as of October 2026. If one
+has changed, please open an issue.
 
 ## What it refuses
 
