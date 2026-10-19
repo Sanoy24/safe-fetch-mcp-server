@@ -6,6 +6,8 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-19
+
 ### Security
 
 - **HTTPS → HTTP redirects are refused by default.** Set
@@ -141,7 +143,8 @@ this project follows [Semantic Versioning](https://semver.org/).
 - External validation via [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit):
   13 findings → 2, zero critical/high remaining. See `SECURITY.md`.
 
-[Unreleased]: https://github.com/Sanoy24/safe-fetch-mcp-server/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Sanoy24/safe-fetch-mcp-server/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.2.0
 [0.1.3]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.2
