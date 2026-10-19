@@ -43,7 +43,12 @@ describe("loadConfig", () => {
       allowlist: [],
       maxBytes: 5_000_000,
       timeoutMs: 10_000,
-      maxRedirects: 5
+      maxRedirects: 5,
+      httpsOnly: false,
+      allowHttpsDowngrade: false,
+      allowedPorts: [],
+      cache: { ttlMs: 0, maxEntries: 100, maxBytes: 20_000_000 },
+      logFormat: "text"
     });
   });
 

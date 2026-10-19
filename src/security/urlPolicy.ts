@@ -1,6 +1,8 @@
-const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
-
+import type { SafeFetchConfig } from "../config.js";
 import { GuardError } from "./errors.js";
+
+const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
+const DEFAULT_PORTS: Readonly<Record<string, number>> = { "http:": 80, "https:": 443 };
 
 /** Structural URL policy violations. Always POLICY_REJECTED. */
 export class UrlPolicyError extends GuardError {
@@ -9,11 +11,19 @@ export class UrlPolicyError extends GuardError {
   }
 }
 
+export type UrlPolicy = Pick<SafeFetchConfig, "allowlist" | "httpsOnly" | "allowedPorts">;
+
+/** The port a connection to `url` will actually use, including the scheme default. */
+export function effectivePort(url: URL): number {
+  return url.port ? Number(url.port) : (DEFAULT_PORTS[url.protocol] ?? 0);
+}
+
 /**
- * Structural checks that don't require DNS: scheme allowlist, userinfo rejection,
- * and (if configured) a host allowlist. Does not touch the network.
+ * Structural checks that don't require DNS: scheme allowlist (and optional
+ * HTTPS-only), userinfo rejection, and the optional host and port allowlists.
+ * Does not touch the network. Runs on the first request and on every redirect hop.
  */
-export function parseAndValidateUrl(rawUrl: string, allowlist: readonly string[]): URL {
+export function parseAndValidateUrl(rawUrl: string, policy: UrlPolicy): URL {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -27,15 +37,31 @@ export function parseAndValidateUrl(rawUrl: string, allowlist: readonly string[]
     );
   }
 
+  if (policy.httpsOnly && url.protocol !== "https:") {
+    throw new UrlPolicyError(
+      "Refused: plain http:// is not allowed because SAFE_FETCH_HTTPS_ONLY is enabled. Use https://."
+    );
+  }
+
   if (url.username !== "" || url.password !== "") {
     throw new UrlPolicyError(
       "Refused: URLs with embedded credentials (user:pass@host) are not allowed."
     );
   }
 
-  if (allowlist.length > 0) {
+  const allowedPorts = policy.allowedPorts ?? [];
+  if (allowedPorts.length > 0) {
+    const port = effectivePort(url);
+    if (!allowedPorts.includes(port)) {
+      throw new UrlPolicyError(
+        `Refused: port ${port} is not in SAFE_FETCH_ALLOWED_PORTS (${allowedPorts.join(", ")}).`
+      );
+    }
+  }
+
+  if (policy.allowlist.length > 0) {
     const host = url.hostname.toLowerCase();
-    if (!allowlist.includes(host)) {
+    if (!policy.allowlist.includes(host)) {
       throw new UrlPolicyError(`Refused: host "${host}" is not in SAFE_FETCH_ALLOWLIST.`);
     }
   }

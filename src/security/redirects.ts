@@ -1,7 +1,8 @@
 import * as http from "node:http";
 import * as https from "node:https";
+import { isIP } from "node:net";
 import type { SafeFetchConfig } from "../config.js";
-import { parseAndValidateUrl } from "./urlPolicy.js";
+import { effectivePort, parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
 import { GuardError } from "./errors.js";
 
@@ -13,11 +14,28 @@ export interface SafeFetchResult {
   readonly contentType: string;
   readonly body: Buffer;
   readonly truncated: boolean;
+  /** Cache validators and directives from the final response, if present. */
+  readonly etag?: string;
+  readonly lastModified?: string;
+  readonly cacheControl?: string;
 }
 
-/** Test seams only — never exposed through the MCP tool. */
+/**
+ * Conditional-request validators. Sent only on the hop whose URL equals `url`
+ * (the cached final URL), so an ETag never leaks to a different origin.
+ */
+export interface ConditionalRequest {
+  readonly url: string;
+  readonly etag?: string;
+  readonly lastModified?: string;
+}
+
+/** Internal options — never exposed through the MCP tool. */
 export interface SafeFetchOptions {
+  /** Test seam: replaces DNS resolution. */
   readonly resolve?: Resolver;
+  /** Used by the response cache to revalidate a stale entry. */
+  readonly conditional?: ConditionalRequest;
 }
 
 interface RawResponse {
@@ -66,10 +84,14 @@ function performPinnedRequest(
   url: URL,
   pinned: PinnedTarget,
   cfg: SafeFetchConfig,
-  signal: AbortSignal
+  signal: AbortSignal,
+  extraHeaders: Readonly<Record<string, string>>
 ): Promise<RawResponse> {
   const client = url.protocol === "https:" ? https : http;
-  const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+  const port = effectivePort(url);
+  // RFC 6066: SNI carries hostnames only, never IP literals.
+  const bareHost = pinned.hostname.replace(/^\[|\]$/g, "");
+  const servername = isIP(bareHost) === 0 ? pinned.hostname : undefined;
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -88,7 +110,7 @@ function performPinnedRequest(
       {
         protocol: url.protocol,
         host: pinned.hostname,
-        servername: pinned.hostname,
+        ...(servername !== undefined ? { servername } : {}),
         lookup: pinned.lookup,
         agent: false,
         port,
@@ -99,7 +121,8 @@ function performPinnedRequest(
         headers: {
           // url.host keeps a non-default port, as RFC 9110 requires.
           Host: url.host,
-          "User-Agent": "safe-fetch-mcp-server"
+          "User-Agent": "safe-fetch-mcp-server",
+          ...extraHeaders
         }
       },
       (res) => {
@@ -180,6 +203,34 @@ function performPinnedRequest(
 }
 
 /**
+ * Per-hop rule on top of the URL policy: an https:// page may not redirect to
+ * plain http:// unless SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE is set. A downgrade
+ * exposes the follow-up request, and the content returned, to network tampering.
+ */
+export function assertRedirectAllowed(from: URL, to: URL, cfg: SafeFetchConfig): void {
+  if (from.protocol === "https:" && to.protocol === "http:" && !cfg.allowHttpsDowngrade) {
+    throw new UrlPolicyError(
+      "Refused: an https:// page redirected to plain http://. Set SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE=true to allow this."
+    );
+  }
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function conditionalHeaders(
+  url: URL,
+  conditional: ConditionalRequest | undefined
+): Record<string, string> {
+  if (!conditional || conditional.url !== url.toString()) return {};
+  const headers: Record<string, string> = {};
+  if (conditional.etag) headers["If-None-Match"] = conditional.etag;
+  if (conditional.lastModified) headers["If-Modified-Since"] = conditional.lastModified;
+  return headers;
+}
+
+/**
  * Fetches a URL, following redirects manually. Every hop — including the first —
  * goes through parseAndValidateUrl + resolveAndPin again, so a 302 to an internal
  * address is refused exactly like a direct request would be. This loop is the only
@@ -203,13 +254,19 @@ export async function fetchWithRedirects(
     let redirectCount = 0;
 
     for (;;) {
-      const url = parseAndValidateUrl(currentUrl, cfg.allowlist);
+      const url = parseAndValidateUrl(currentUrl, cfg);
       const pinned = await untilAborted(
         resolveAndPin(url.hostname, cfg.allowLocal, options.resolve),
         signal,
         () => timeoutError(cfg)
       );
-      const response = await performPinnedRequest(url, pinned, cfg, signal);
+      const response = await performPinnedRequest(
+        url,
+        pinned,
+        cfg,
+        signal,
+        conditionalHeaders(url, options.conditional)
+      );
 
       if (REDIRECT_STATUSES.has(response.status)) {
         const location = response.headers.location;
@@ -226,28 +283,35 @@ export async function fetchWithRedirects(
             `Refused: exceeded maximum of ${cfg.maxRedirects} redirects.`
           );
         }
+        let next: URL;
         try {
-          currentUrl = new URL(location, url).toString();
+          next = new URL(location, url);
         } catch {
           throw new SafeFetchError(
             "REDIRECT_FAILED",
             "Refused: redirect response had an invalid Location header."
           );
         }
+        assertRedirectAllowed(url, next, cfg);
+        currentUrl = next.toString();
         continue;
       }
 
-      const contentTypeHeader = response.headers["content-type"];
-      const contentType = Array.isArray(contentTypeHeader)
-        ? (contentTypeHeader[0] ?? "application/octet-stream")
-        : (contentTypeHeader ?? "application/octet-stream");
+      const contentType =
+        firstHeader(response.headers["content-type"]) ?? "application/octet-stream";
+      const etag = firstHeader(response.headers.etag);
+      const lastModified = firstHeader(response.headers["last-modified"]);
+      const cacheControl = firstHeader(response.headers["cache-control"]);
 
       return {
         status: response.status,
         finalUrl: url.toString(),
         contentType,
         body: response.body,
-        truncated: response.truncated
+        truncated: response.truncated,
+        ...(etag !== undefined ? { etag } : {}),
+        ...(lastModified !== undefined ? { lastModified } : {}),
+        ...(cacheControl !== undefined ? { cacheControl } : {})
       };
     }
   } finally {

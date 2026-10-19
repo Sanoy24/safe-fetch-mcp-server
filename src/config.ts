@@ -1,9 +1,28 @@
+export interface CacheConfig {
+  /** How long a response is reused. 0 disables the cache (default). */
+  readonly ttlMs: number;
+  readonly maxEntries: number;
+  /** Upper bound on the total body bytes held in memory. */
+  readonly maxBytes: number;
+}
+
 export interface SafeFetchConfig {
   allowLocal: boolean;
   allowlist: readonly string[];
   maxBytes: number;
   timeoutMs: number;
   maxRedirects: number;
+  // Optional egress tightening. Undefined means the documented default.
+  /** Refuse plain http:// URLs and hops. Default false. */
+  httpsOnly?: boolean;
+  /** Follow https:// → http:// redirects. Default false (refused). */
+  allowHttpsDowngrade?: boolean;
+  /** Destination ports allowed. Empty or undefined allows any port. */
+  allowedPorts?: readonly number[];
+  /** Response cache. Undefined or ttlMs 0 disables it. */
+  cache?: CacheConfig;
+  /** Audit-log line format on stderr. Default "text". */
+  logFormat?: "text" | "json";
 }
 
 /** Thrown for an invalid environment variable. The message names the variable. */
@@ -53,6 +72,21 @@ function parseList(value: string | undefined): readonly string[] {
     .filter((entry) => entry.length > 0);
 }
 
+function parsePorts(name: string, value: string | undefined): readonly number[] {
+  return parseList(value).map((entry) =>
+    parseIntEnv(name, entry, 0, { min: 1, max: 65_535 })
+  );
+}
+
+function parseLogFormat(value: string | undefined): "text" | "json" {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "" || normalized === "text") return "text";
+  if (normalized === "json") return "json";
+  throw new ConfigError(
+    `SAFE_FETCH_LOG_FORMAT must be "text" or "json" (got "${value}").`
+  );
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfig {
   return {
     allowLocal: parseBoolean(
@@ -68,7 +102,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
       env["SAFE_FETCH_MAX_REDIRECTS"],
       5,
       { min: 0, max: 20 }
-    )
+    ),
+    httpsOnly: parseBoolean("SAFE_FETCH_HTTPS_ONLY", env["SAFE_FETCH_HTTPS_ONLY"], false),
+    allowHttpsDowngrade: parseBoolean(
+      "SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE",
+      env["SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE"],
+      false
+    ),
+    allowedPorts: parsePorts("SAFE_FETCH_ALLOWED_PORTS", env["SAFE_FETCH_ALLOWED_PORTS"]),
+    cache: {
+      ttlMs: parseIntEnv("SAFE_FETCH_CACHE_TTL_MS", env["SAFE_FETCH_CACHE_TTL_MS"], 0, {
+        min: 0
+      }),
+      maxEntries: parseIntEnv(
+        "SAFE_FETCH_CACHE_MAX_ENTRIES",
+        env["SAFE_FETCH_CACHE_MAX_ENTRIES"],
+        100
+      ),
+      maxBytes: parseIntEnv(
+        "SAFE_FETCH_CACHE_MAX_BYTES",
+        env["SAFE_FETCH_CACHE_MAX_BYTES"],
+        20_000_000
+      )
+    },
+    logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"])
   };
 }
 

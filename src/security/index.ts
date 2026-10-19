@@ -26,7 +26,7 @@ export async function assertSafeUrl(
   rawUrl: string,
   cfg: SafeFetchConfig = getConfig()
 ): Promise<URL> {
-  const url = parseAndValidateUrl(rawUrl, cfg.allowlist);
+  const url = parseAndValidateUrl(rawUrl, cfg);
   await resolveAndPin(url.hostname, cfg.allowLocal);
   return url;
 }
