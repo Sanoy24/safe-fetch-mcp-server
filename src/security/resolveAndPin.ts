@@ -18,6 +18,11 @@ export interface PinnedTarget {
   readonly lookup: LookupFunction;
 }
 
+/** Resolves a hostname to every A/AAAA answer. Injectable so tests can fake DNS. */
+export type Resolver = (hostname: string) => Promise<LookupAddress[]>;
+
+export const systemResolver: Resolver = (hostname) => dnsLookup(hostname, { all: true });
+
 /**
  * Resolves `hostname` once, validates every returned address, and returns a target
  * pinned to one validated IP. Rejects if ANY resolved address is blocked (per the
@@ -26,11 +31,12 @@ export interface PinnedTarget {
  */
 export async function resolveAndPin(
   hostname: string,
-  allowLocal: boolean
+  allowLocal: boolean,
+  resolve: Resolver = systemResolver
 ): Promise<PinnedTarget> {
   let addresses: LookupAddress[];
   try {
-    addresses = await dnsLookup(hostname, { all: true });
+    addresses = await resolve(hostname);
   } catch {
     throw new ResolutionError(`Refused: could not resolve host "${hostname}".`);
   }

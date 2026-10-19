@@ -1,10 +1,15 @@
 import { config as defaultConfig, type SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, ResolutionError } from "./resolveAndPin.js";
-import { fetchWithRedirects, SafeFetchError, type SafeFetchResult } from "./redirects.js";
+import {
+  fetchWithRedirects,
+  SafeFetchError,
+  type SafeFetchOptions,
+  type SafeFetchResult
+} from "./redirects.js";
 
 export { UrlPolicyError, ResolutionError, SafeFetchError };
-export type { SafeFetchResult, SafeFetchConfig };
+export type { SafeFetchResult, SafeFetchConfig, SafeFetchOptions };
 
 /**
  * Validates a URL against policy + DNS/IP checks without fetching it. Throws
@@ -26,7 +31,8 @@ export async function assertSafeUrl(
  */
 export async function safeFetch(
   rawUrl: string,
-  cfg: SafeFetchConfig = defaultConfig
+  cfg: SafeFetchConfig = defaultConfig,
+  options: SafeFetchOptions = {}
 ): Promise<SafeFetchResult> {
-  return fetchWithRedirects(rawUrl, cfg);
+  return fetchWithRedirects(rawUrl, cfg, options);
 }
