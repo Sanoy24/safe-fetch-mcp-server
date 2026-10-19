@@ -20,7 +20,9 @@ export const FetchUrlInput = z
       .int()
       .positive()
       .optional()
-      .describe("Override the max response size for this call."),
+      .describe(
+        "Lower the max response size (bytes) for this call. Cannot exceed the server's configured limit."
+      ),
     start_index: z
       .number()
       .int()
@@ -81,9 +83,11 @@ export async function runFetchUrl(
     };
   }
 
+  // The caller (an LLM, possibly steered by fetched content) may only tighten the
+  // operator's limit, never loosen it.
   const cfg: SafeFetchConfig =
     input.max_bytes !== undefined
-      ? { ...baseConfig, maxBytes: input.max_bytes }
+      ? { ...baseConfig, maxBytes: Math.min(input.max_bytes, baseConfig.maxBytes) }
       : baseConfig;
 
   try {
