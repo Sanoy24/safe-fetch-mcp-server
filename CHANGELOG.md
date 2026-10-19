@@ -16,6 +16,12 @@ this project follows [Semantic Versioning](https://semver.org/).
   and `nextStartIndex` in results, and a continuation note in the text.
 - A startup warning when HTTP mode binds a non-loopback address.
 - Graceful shutdown on SIGINT/SIGTERM in HTTP mode.
+- `safe-web-fetch` companion agent skill (`skills/safe-web-fetch`), attached to
+  each GitHub release as a zip.
+- Release workflow: npm trusted publishing with provenance, MCP Registry publish, and
+  a GitHub release, all from a version tag. See `RELEASING.md`.
+- CI runs a clean-install smoke test: it packs the tarball, installs it in an empty
+  directory, and drives the binary over stdio.
 
 ### Security
 

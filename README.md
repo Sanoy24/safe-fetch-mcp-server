@@ -95,6 +95,13 @@ Failures set `isError: true` and `structuredContent.error = { code, retryable }`
 | `UNSUPPORTED_CONTENT_TYPE` | no        | Response isn't text (images, PDFs, binaries, ...)                 |
 | `INTERNAL_ERROR`           | no        | Unexpected failure. Details are in the server's stderr log        |
 
+### Companion agent skill
+
+[`skills/safe-web-fetch`](skills/safe-web-fetch/SKILL.md) teaches an agent to use
+`fetch_url` well: paging, handling each error code, never working around a refusal,
+and treating fetched text as untrusted. Each GitHub release attaches it as
+`safe-web-fetch-skill.zip`. The protection itself comes from the server, not the skill.
+
 ## What it does not guarantee
 
 - **Prompt injection.** Fetched pages are labeled as untrusted data, but a label
