@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "safe-fetch": {
+      "command": "npx",
+      "args": ["-y", "safe-fetch-mcp-server"]
+    }
+  }
+}
