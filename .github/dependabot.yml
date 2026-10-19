@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Keep @types/node on the engines floor (Node 22), not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       dev-dependencies:
         dependency-type: development
