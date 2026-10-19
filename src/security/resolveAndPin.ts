@@ -3,6 +3,11 @@ import type { LookupAddress, LookupOptions } from "node:dns";
 import type { LookupFunction } from "node:net";
 import { isBlockedIp, isAlwaysBlockedIp } from "./ipGuard.js";
 
+/**
+ * Messages are shown to the calling model, so they never include resolved
+ * addresses (that would turn refusals into an internal-DNS oracle). The resolved
+ * address goes in `cause`, which only the stderr audit log prints.
+ */
 export class ResolutionError extends Error {}
 
 export interface PinnedTarget {
@@ -37,8 +42,10 @@ export async function resolveAndPin(
   let addresses: LookupAddress[];
   try {
     addresses = await resolve(hostname);
-  } catch {
-    throw new ResolutionError(`Refused: could not resolve host "${hostname}".`);
+  } catch (err) {
+    throw new ResolutionError(`Refused: could not resolve host "${hostname}".`, {
+      cause: err instanceof Error ? err.message : String(err)
+    });
   }
 
   if (addresses.length === 0) {
@@ -49,8 +56,9 @@ export async function resolveAndPin(
     // Link-local / cloud metadata is never bypassable, even with ALLOW_LOCAL=true.
     if (isAlwaysBlockedIp(addr.address)) {
       throw new ResolutionError(
-        `Refused: "${hostname}" resolved to link-local/metadata address ${addr.address}. ` +
-          "This is never allowed, regardless of SAFE_FETCH_ALLOW_LOCAL."
+        `Refused: "${hostname}" resolves to a cloud-metadata, link-local or reserved ` +
+          "address. This is never allowed, regardless of SAFE_FETCH_ALLOW_LOCAL.",
+        { cause: `resolved address=${addr.address}` }
       );
     }
   }
@@ -59,8 +67,9 @@ export async function resolveAndPin(
     for (const addr of addresses) {
       if (isBlockedIp(addr.address)) {
         throw new ResolutionError(
-          `Refused: "${hostname}" resolved to disallowed address ${addr.address}. ` +
-            "Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets."
+          `Refused: "${hostname}" resolves to a private or non-public address. ` +
+            "Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets.",
+          { cause: `resolved address=${addr.address}` }
         );
       }
     }

@@ -78,6 +78,32 @@ describe("runFetchUrl", () => {
     expect(lowered.structuredContent?.bytes).toBe(10);
   });
 
+  it("never reveals resolved internal addresses to the caller, only to the audit log", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    // "localhost" resolves to 127.0.0.1 and/or ::1 depending on the OS.
+    const result = await runFetchUrl({ url: "http://localhost/" }, testConfig());
+
+    expect(result.isError).toBe(true);
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("SAFE_FETCH_ALLOW_LOCAL"); // still actionable
+    expect(text).not.toMatch(/127\.0\.0\.1|::1/);
+    expect(spy).toHaveBeenCalledWith(expect.stringMatching(/127\.0\.0\.1|::1/));
+  });
+
+  it("does not pass raw socket errors through to the caller", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    // Nothing listens on port 1.
+    const result = await runFetchUrl(
+      { url: "http://127.0.0.1:1/" },
+      testConfig({ allowLocal: true })
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).not.toMatch(/ECONNREFUSED|127\.0\.0\.1:1/);
+  });
+
   it("logs an audit line to stderr on a refusal, without the untrusted-data framing", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
