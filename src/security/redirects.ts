@@ -133,7 +133,10 @@ function performPinnedRequest(
           settleReject(
             signal.aborted
               ? timeoutError(cfg)
-              : new SafeFetchError(`Refused: response stream error: ${err.message}`)
+              : new SafeFetchError(
+                  `Refused: the connection to "${pinned.hostname}" failed while reading the response.`,
+                  { cause: err.message }
+                )
           );
         });
 
@@ -156,9 +159,9 @@ function performPinnedRequest(
       settleReject(
         signal.aborted
           ? timeoutError(cfg)
-          : new SafeFetchError(
-              `Refused: request to "${pinned.hostname}" failed: ${err.message}`
-            )
+          : new SafeFetchError(`Refused: could not connect to "${pinned.hostname}".`, {
+              cause: err.message
+            })
       );
     });
 

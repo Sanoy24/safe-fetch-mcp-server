@@ -120,7 +120,14 @@ export async function runFetchUrl(
     const message = isRefusal(err)
       ? err.message
       : "Refused: the request could not be completed.";
-    console.error(`[fetch_url] url=${input.url} outcome=refused reason="${message}"`);
+    // Internal detail (resolved address, socket error) goes to the operator's log
+    // only, never into the result the model sees.
+    const detail =
+      err instanceof Error && err.cause !== undefined ? String(err.cause) : "";
+    console.error(
+      `[fetch_url] url=${input.url} outcome=refused reason="${message}"` +
+        (detail ? ` detail="${detail}"` : "")
+    );
     return { isError: true, content: [{ type: "text", text: message }] };
   }
 }

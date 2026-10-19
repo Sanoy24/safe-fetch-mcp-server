@@ -44,8 +44,8 @@ Claude Desktop). No build step, no config required — safe by default.
 ```text
 > fetch_url({ url: "http://169.254.169.254/latest/meta-data/" })
 
-Refused: "169.254.169.254" resolved to link-local/metadata address
-169.254.169.254. This is never allowed, regardless of SAFE_FETCH_ALLOW_LOCAL.
+Refused: "169.254.169.254" resolves to a cloud-metadata, link-local or reserved
+address. This is never allowed, regardless of SAFE_FETCH_ALLOW_LOCAL.
 ```
 
 ```text
