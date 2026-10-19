@@ -1,0 +1,14 @@
+name: Feature request
+description: Suggest an improvement. Read "Things NOT to do" in CLAUDE.md first.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution, and how it keeps the security guard intact

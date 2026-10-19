@@ -1,9 +1,23 @@
+# Dependencies and build output
 node_modules/
 dist/
+coverage/
+*.tsbuildinfo
+*.tgz
+
+# Logs and env
 *.log
 .env
 .env.*
 !.env.example
-coverage/
+
+# OS / editor
 .DS_Store
-*.tsbuildinfo
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local agent config (personal, not project contract)
+.claude/settings.local.json
+.claude/skills/karpathy-guidelines/
