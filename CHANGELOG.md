@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- Block Alibaba Cloud metadata (`100.100.100.200`), which was fetchable under the
+  default config, and make AWS IPv6 IMDS (`fd00:ec2::254`) never bypassable. It
+  previously sat in the ULA tier that `SAFE_FETCH_ALLOW_LOCAL=true` unlocks.
+- Unwrap NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) addresses and check the
+  embedded IPv4, so `64:ff9b::a9fe:a9fe` can no longer reach `169.254.169.254`.
+- Block CGNAT, multicast, reserved/broadcast, benchmarking, documentation and other
+  IANA special-purpose ranges. IPv6 is public only within global unicast `2000::/3`.
+- `SAFE_FETCH_TIMEOUT_MS` is now one total deadline covering DNS, connect, headers
+  and body across all redirect hops. It was a per-socket idle timer, which a
+  slow-drip server could hold open indefinitely.
+- The `max_bytes` tool argument can only lower `SAFE_FETCH_MAX_BYTES`, not raise it.
+- Refusal messages no longer include resolved IP addresses or raw socket errors.
+  That detail is written to the stderr audit log only.
+
+### Fixed
+
+- The `Host` header now includes a non-default port.
+
+### Changed
+
+- Refusal message wording changed (see Security). Anything matching on the old
+  text needs updating.
+
 ## [0.1.3] - 2026-08-11
 
 ### Fixed
