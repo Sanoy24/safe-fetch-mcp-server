@@ -6,7 +6,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { createHttpApp } from "../src/httpApp.js";
 import type { HttpTransportConfig } from "../src/config.js";
 
-function testHttpConfig(overrides: Partial<HttpTransportConfig> = {}): HttpTransportConfig {
+function testHttpConfig(
+  overrides: Partial<HttpTransportConfig> = {}
+): HttpTransportConfig {
   return {
     host: "127.0.0.1",
     port: 0,
@@ -106,7 +108,9 @@ describe("CORS for an explicitly allowed origin", () => {
   let corsBaseUrl: string;
 
   beforeAll(async () => {
-    const app = createHttpApp(testHttpConfig({ allowedOrigins: ["https://trusted.example"] }));
+    const app = createHttpApp(
+      testHttpConfig({ allowedOrigins: ["https://trusted.example"] })
+    );
     corsServer = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => corsServer.once("listening", resolve));
     const port = (corsServer.address() as AddressInfo).port;
@@ -123,7 +127,9 @@ describe("CORS for an explicitly allowed origin", () => {
       headers: { origin: "https://trusted.example" }
     });
     expect(response.status).toBe(204);
-    expect(response.headers.get("access-control-allow-origin")).toBe("https://trusted.example");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://trusted.example"
+    );
     expect(response.headers.get("access-control-allow-methods")).toContain("POST");
   });
 
@@ -138,7 +144,9 @@ describe("CORS for an explicitly allowed origin", () => {
       body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 })
     });
     expect(response.status).not.toBe(403);
-    expect(response.headers.get("access-control-allow-origin")).toBe("https://trusted.example");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://trusted.example"
+    );
   });
 
   it("matches an allowed origin case-insensitively", async () => {
@@ -160,7 +168,9 @@ describe("Rate limiting", () => {
   let rateLimitedBaseUrl: string;
 
   beforeAll(async () => {
-    const app = createHttpApp(testHttpConfig({ rateLimitMax: 2, rateLimitWindowMs: 60_000 }));
+    const app = createHttpApp(
+      testHttpConfig({ rateLimitMax: 2, rateLimitWindowMs: 60_000 })
+    );
     rateLimitedServer = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => rateLimitedServer.once("listening", resolve));
     const port = (rateLimitedServer.address() as AddressInfo).port;
@@ -172,7 +182,8 @@ describe("Rate limiting", () => {
   });
 
   it("returns 429 once a client exceeds the configured limit", async () => {
-    const get = (): Promise<Response> => fetch(`${rateLimitedBaseUrl}/mcp`, { method: "GET" });
+    const get = (): Promise<Response> =>
+      fetch(`${rateLimitedBaseUrl}/mcp`, { method: "GET" });
 
     const first = await get();
     const second = await get();

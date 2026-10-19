@@ -17,10 +17,10 @@ conventions — do not fall back to older patterns.
 Initialize once:
 
 ```ts
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 const server = new McpServer({
-    name: 'safe-fetch-mcp-server',
-    version: '0.1.0',
+  name: "safe-fetch-mcp-server",
+  version: "0.1.0"
 });
 ```
 
@@ -36,29 +36,29 @@ const server = new McpServer({
 - Derive the TypeScript type from the schema with `z.infer`.
 
 ```ts
-import { z } from 'zod';
+import { z } from "zod";
 
 export const FetchUrlInput = z
-    .object({
-        url: z.string().url().describe('Absolute http(s) URL to fetch.'),
-        format: z
-            .enum(['markdown', 'raw'])
-            .default('markdown')
-            .describe("Output format. 'markdown' (default) or 'raw' text."),
-        max_bytes: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe('Override the max response size for this call.'),
-        start_index: z
-            .number()
-            .int()
-            .min(0)
-            .default(0)
-            .describe('Byte offset for chunked reading of long pages.'),
-    })
-    .strict();
+  .object({
+    url: z.string().url().describe("Absolute http(s) URL to fetch."),
+    format: z
+      .enum(["markdown", "raw"])
+      .default("markdown")
+      .describe("Output format. 'markdown' (default) or 'raw' text."),
+    max_bytes: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Override the max response size for this call."),
+    start_index: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe("Byte offset for chunked reading of long pages.")
+  })
+  .strict();
 
 export type FetchUrlInput = z.infer<typeof FetchUrlInput>;
 ```
@@ -72,22 +72,22 @@ export type FetchUrlInput = z.infer<typeof FetchUrlInput>;
 
 ```ts
 server.registerTool(
-    'fetch_url',
-    {
-        title: 'Fetch URL',
-        description:
-            'Fetch an http(s) URL and return clean markdown. Read-only; refuses private/loopback/metadata targets by default. Args: url, format, max_bytes?, start_index?. Returns text plus structuredContent {status, finalUrl, contentType, bytes, truncated}.',
-        inputSchema: FetchUrlInput,
-        annotations: {
-            readOnlyHint: true,
-            destructiveHint: false,
-            idempotentHint: true,
-            openWorldHint: true,
-        },
-    },
-    async (params: FetchUrlInput) => {
-        /* call the single hardened fetch function; see security skill */
-    },
+  "fetch_url",
+  {
+    title: "Fetch URL",
+    description:
+      "Fetch an http(s) URL and return clean markdown. Read-only; refuses private/loopback/metadata targets by default. Args: url, format, max_bytes?, start_index?. Returns text plus structuredContent {status, finalUrl, contentType, bytes, truncated}.",
+    inputSchema: FetchUrlInput,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  async (params: FetchUrlInput) => {
+    /* call the single hardened fetch function; see security skill */
+  }
 );
 ```
 
@@ -98,8 +98,8 @@ Return both a human-readable text block and machine-readable `structuredContent`
 ```ts
 const output = { status, finalUrl, contentType, bytes, truncated };
 return {
-    content: [{ type: 'text', text: markdown }],
-    structuredContent: output,
+  content: [{ type: "text", text: markdown }],
+  structuredContent: output
 };
 ```
 
@@ -110,13 +110,13 @@ return {
 
 ```ts
 return {
-    isError: true,
-    content: [
-        {
-            type: 'text',
-            text: 'Refused: URL resolved to private IP 10.0.0.5. Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets.',
-        },
-    ],
+  isError: true,
+  content: [
+    {
+      type: "text",
+      text: "Refused: URL resolved to private IP 10.0.0.5. Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets."
+    }
+  ]
 };
 ```
 

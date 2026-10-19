@@ -33,7 +33,8 @@ describe("toMarkdown", () => {
   });
 
   it("strips script/style content instead of leaking it as text", () => {
-    const html = "<html><head><style>body{color:red}</style></head><body><h1>Title</h1><script>evil()</script></body></html>";
+    const html =
+      "<html><head><style>body{color:red}</style></head><body><h1>Title</h1><script>evil()</script></body></html>";
     const markdown = toMarkdown(Buffer.from(html), "text/html");
     expect(markdown).toContain("Title");
     expect(markdown).not.toContain("color:red");

@@ -59,7 +59,9 @@ export interface HttpTransportConfig {
   readonly rateLimitWindowMs: number;
 }
 
-export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpTransportConfig {
+export function loadHttpConfig(
+  env: NodeJS.ProcessEnv = process.env
+): HttpTransportConfig {
   return {
     host: env["HOST"] ?? "127.0.0.1",
     port: parsePort(env["PORT"], 3000),
