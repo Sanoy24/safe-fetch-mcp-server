@@ -126,7 +126,7 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 [Unreleased]: https://github.com/Sanoy24/safe-fetch-mcp-server/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.2.0
-[0.1.3]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.3
-[0.1.2]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.2
-[0.1.1]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.1
-[0.1.0]: https://github.com/sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.0
+[0.1.3]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.3
+[0.1.2]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.2
+[0.1.1]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.1
+[0.1.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.1.0
