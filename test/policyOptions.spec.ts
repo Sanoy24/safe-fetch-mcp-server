@@ -6,7 +6,7 @@ import { parseAndValidateUrl } from "../src/security/urlPolicy.js";
 import { assertRedirectAllowed } from "../src/security/redirects.js";
 import { loadConfig, ConfigError, type SafeFetchConfig } from "../src/config.js";
 
-// Optional, operator-controlled egress tightening (threat-model rows 18-20).
+// Optional, operator-controlled egress tightening (threat-model rows 18-19).
 
 function testConfig(overrides: Partial<SafeFetchConfig> = {}): SafeFetchConfig {
   return {

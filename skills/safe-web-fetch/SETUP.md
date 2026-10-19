@@ -50,6 +50,9 @@ The defaults are safe. Override them with an `env` block next to `command`:
 | `SAFE_FETCH_TIMEOUT_MS`    | `10000`   | Total time limit per fetch, including redirects                                                                   |
 | `SAFE_FETCH_MAX_REDIRECTS` | `5`       | Redirect limit (0–20)                                                                                             |
 | `SAFE_FETCH_ALLOW_LOCAL`   | `false`   | Allows loopback and private networks. **Trusted local development only.** Cloud metadata stays blocked regardless |
+| `SAFE_FETCH_HTTPS_ONLY`    | `false`   | Refuse plain `http://`                                                                                            |
+| `SAFE_FETCH_ALLOWED_PORTS` | _(any)_   | Restrict destination ports, e.g. `443`                                                                            |
+| `SAFE_FETCH_CACHE_TTL_MS`  | `0` (off) | Reuse responses for this long (still re-checked against policy on every use)                                      |
 
 An invalid value stops the server with a message naming the variable. Check your
 client's MCP logs if `fetch_url` doesn't appear.

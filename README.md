@@ -109,8 +109,9 @@ and treating fetched text as untrusted. Each GitHub release attaches it as
   own defenses.
 - **Authentication in HTTP mode.** There is none. Keep HTTP mode on loopback (the
   default), or put it behind your own authenticating proxy.
-- **Tighter egress than "public internet".** Any public host and port is reachable.
-  Use `SAFE_FETCH_ALLOWLIST` to restrict hosts.
+- **Tighter egress than "public internet" by default.** Any public host and port is
+  reachable unless you set `SAFE_FETCH_ALLOWLIST`, `SAFE_FETCH_ALLOWED_PORTS` or
+  `SAFE_FETCH_HTTPS_ONLY`.
 
 Details: [threat model → Not guaranteed](docs/threat-model.md#not-guaranteed).
 
@@ -159,19 +160,26 @@ Full matrix with the test for each row, address classes and trust boundaries:
 
 ## Configuration
 
-| Env var                           | Default     | Meaning                                                                           |
-| --------------------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `SAFE_FETCH_ALLOW_LOCAL`          | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                |
-| `SAFE_FETCH_ALLOWLIST`            | _(empty)_   | Comma-separated host allowlist                                                    |
-| `SAFE_FETCH_MAX_BYTES`            | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it   |
-| `SAFE_FETCH_TIMEOUT_MS`           | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects             |
-| `SAFE_FETCH_MAX_REDIRECTS`        | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                   |
-| `TRANSPORT` / `--http` flag       | stdio       | Switch to Streamable HTTP                                                         |
-| `HOST`                            | `127.0.0.1` | HTTP bind address. A non-loopback address prints a warning: HTTP mode has no auth |
-| `PORT`                            | `3000`      | HTTP port                                                                         |
-| `SAFE_FETCH_ALLOWED_ORIGINS`      | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                             |
-| `SAFE_FETCH_RATE_LIMIT_MAX`       | `60`        | Requests per window, per IP (HTTP mode)                                           |
-| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS` | `60000`     | Rate-limit window                                                                 |
+| Env var                            | Default     | Meaning                                                                                                             |
+| ---------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `SAFE_FETCH_ALLOW_LOCAL`           | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
+| `SAFE_FETCH_ALLOWLIST`             | _(empty)_   | Comma-separated host allowlist                                                                                      |
+| `SAFE_FETCH_MAX_BYTES`             | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
+| `SAFE_FETCH_TIMEOUT_MS`            | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
+| `SAFE_FETCH_MAX_REDIRECTS`         | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
+| `TRANSPORT` / `--http` flag        | stdio       | Switch to Streamable HTTP                                                                                           |
+| `HOST`                             | `127.0.0.1` | HTTP bind address. A non-loopback address prints a warning: HTTP mode has no auth                                   |
+| `PORT`                             | `3000`      | HTTP port                                                                                                           |
+| `SAFE_FETCH_ALLOWED_ORIGINS`       | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
+| `SAFE_FETCH_RATE_LIMIT_MAX`        | `60`        | Requests per window, per IP (HTTP mode)                                                                             |
+| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS`  | `60000`     | Rate-limit window                                                                                                   |
+| `SAFE_FETCH_HTTPS_ONLY`            | `false`     | Refuse plain `http://` URLs and redirect hops                                                                       |
+| `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE` | `false`     | Follow `https://` → `http://` redirects (refused by default)                                                        |
+| `SAFE_FETCH_ALLOWED_PORTS`         | _(any)_     | Comma-separated destination ports, e.g. `443,8443`. Default ports count (`:80`, `:443`)                             |
+| `SAFE_FETCH_CACHE_TTL_MS`          | `0` (off)   | Reuse responses this long. Every cache hit re-runs the full guard; stale entries revalidate with ETag/Last-Modified |
+| `SAFE_FETCH_CACHE_MAX_ENTRIES`     | `100`       | Cache entry limit (LRU)                                                                                             |
+| `SAFE_FETCH_CACHE_MAX_BYTES`       | `20000000`  | Total cached body bytes                                                                                             |
+| `SAFE_FETCH_LOG_FORMAT`            | `text`      | `json` writes one JSON object per audit line to stderr                                                              |
 
 Invalid values stop the server at startup with a message naming the variable.
 Nothing silently falls back to a default.

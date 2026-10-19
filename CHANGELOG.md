@@ -6,6 +6,23 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **HTTPS → HTTP redirects are refused by default.** Set
+  `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE=true` to allow them.
+- TLS SNI is no longer sent for IP-literal hosts (RFC 6066).
+- HTTP mode no longer echoes a rejected `Origin` header back in the error.
+
+### Added
+
+- `SAFE_FETCH_HTTPS_ONLY`: refuse plain `http://` URLs and hops.
+- `SAFE_FETCH_ALLOWED_PORTS`: restrict destination ports, checked on every hop.
+- Opt-in response cache (`SAFE_FETCH_CACHE_TTL_MS`, `_MAX_ENTRIES`, `_MAX_BYTES`).
+  It's bounded (LRU by entry count and bytes), honours `no-store`/`private`/`max-age`,
+  and revalidates stale entries with ETag/Last-Modified. Every hit re-runs the full guard
+  on the stored redirect chain. Results report `fromCache`.
+- `SAFE_FETCH_LOG_FORMAT=json` for structured audit logs on stderr.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
