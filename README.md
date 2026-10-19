@@ -10,6 +10,8 @@ reach your internal network. Not just "has SSRF protection" — everyone claims
 that — but a regression test for each edge case that produced real 2026 CVEs in
 other fetch servers. The [threat model](docs/threat-model.md) maps every defense to its test.
 
+![MCP Inspector demo: fetch_url refuses localhost as a private address, returns example.com as markdown framed as untrusted data, and refuses the cloud metadata address 169.254.169.254 with POLICY_REJECTED, retryable false](https://raw.githubusercontent.com/Sanoy24/safe-fetch-mcp-server/main/docs/demo.gif)
+
 ## Why
 
 - The most-used reference fetch server ships with **no SSRF protection**, by
