@@ -110,88 +110,147 @@ function isInCidr6(ip: bigint, cidr: Cidr6): boolean {
   return (ip & mask) === (cidr.base & mask);
 }
 
-// Row references are to the threat matrix in .claude/skills/secure-fetch-ssrf/SKILL.md
+// Row references are to the threat matrix in .claude/skills/secure-fetch-ssrf/SKILL.md.
+// Ranges come from the IANA IPv4/IPv6 Special-Purpose Address Registries.
 //
-// Split into two tiers, deliberately:
-//   - LOCAL_*: loopback, RFC-1918, ULA — legitimate to opt into via
-//     SAFE_FETCH_ALLOW_LOCAL for a trusted local-dev target.
-//   - ALWAYS_BLOCKED_*: link-local / cloud metadata (169.254.0.0/16, fe80::/10) —
-//     the single most dangerous SSRF outcome (cloud credential theft) and never
-//     something "local dev access" should imply. Never bypassed by ALLOW_LOCAL.
-const LOCAL_IPV4_CIDRS: Cidr4[] = [
+// Every address falls into exactly one of three classes, deliberately:
+//   - "forbidden": cloud metadata, link-local, multicast, reserved. Never a
+//     legitimate fetch target and never something "local dev access" should imply.
+//     Not bypassable by SAFE_FETCH_ALLOW_LOCAL. Checked first, so a forbidden /32
+//     inside a private range (e.g. 100.100.100.200 inside 100.64.0.0/10) wins.
+//   - "private": loopback, RFC-1918, ULA and other non-global space. Blocked by
+//     default; SAFE_FETCH_ALLOW_LOCAL opts into it for a trusted local target.
+//   - "public": everything else for IPv4; only global unicast (2000::/3) for IPv6.
+export type IpClass = "public" | "private" | "forbidden";
+
+const FORBIDDEN_IPV4_CIDRS: Cidr4[] = [
+  parseCidr4("169.254.0.0/16"), // row 1: link-local / AWS, GCP, Azure, OCI metadata
+  parseCidr4("100.100.100.200/32"), // row 1: Alibaba Cloud metadata
+  parseCidr4("224.0.0.0/4"), // multicast
+  parseCidr4("240.0.0.0/4") // reserved, includes broadcast 255.255.255.255
+];
+
+const PRIVATE_IPV4_CIDRS: Cidr4[] = [
   parseCidr4("127.0.0.0/8"), // row 3: loopback
   parseCidr4("10.0.0.0/8"), // row 2: RFC-1918
   parseCidr4("172.16.0.0/12"), // row 2: RFC-1918
   parseCidr4("192.168.0.0/16"), // row 2: RFC-1918
   // 0.0.0.0/8 is not in the documented matrix but is a well-known real bypass:
   // on Linux, 0.0.0.0 (and the rest of this block) routes to localhost.
-  parseCidr4("0.0.0.0/8")
+  parseCidr4("0.0.0.0/8"),
+  parseCidr4("100.64.0.0/10"), // CGNAT / shared address space (often internal on clouds)
+  parseCidr4("192.0.0.0/24"), // IETF protocol assignments
+  parseCidr4("192.0.2.0/24"), // TEST-NET-1
+  parseCidr4("198.18.0.0/15"), // benchmarking
+  parseCidr4("198.51.100.0/24"), // TEST-NET-2
+  parseCidr4("203.0.113.0/24") // TEST-NET-3
 ];
 
-const LOCAL_IPV6_CIDRS: Cidr6[] = [
+const FORBIDDEN_IPV6_CIDRS: Cidr6[] = [
+  parseCidr6("fe80::/10"), // IPv6 link-local, the v6 analog of row 1
+  parseCidr6("fd00:ec2::254/128"), // row 1: AWS IMDS over IPv6 (inside ULA, so checked first)
+  parseCidr6("ff00::/8") // multicast
+];
+
+const PRIVATE_IPV6_CIDRS: Cidr6[] = [
   parseCidr6("::1/128"), // row 5: IPv6 loopback
   parseCidr6("fc00::/7"), // row 5: unique local address (ULA)
-  parseCidr6("::/128") // unspecified address, analog of 0.0.0.0
+  parseCidr6("::/128"), // unspecified address, analog of 0.0.0.0
+  // Inside 2000::/3 but not globally reachable:
+  parseCidr6("2001::/32"), // Teredo (embeds an obfuscated IPv4)
+  parseCidr6("2001:db8::/32") // documentation
 ];
 
-const ALWAYS_BLOCKED_IPV4_CIDRS: Cidr4[] = [
-  parseCidr4("169.254.0.0/16") // row 1: link-local / cloud metadata
-];
+const GLOBAL_UNICAST_IPV6: Cidr6 = parseCidr6("2000::/3");
 
-const ALWAYS_BLOCKED_IPV6_CIDRS: Cidr6[] = [
-  parseCidr6("fe80::/10") // IPv6 link-local, the v6 analog of row 1
-];
-
-function unwrapEmbeddedIPv4(groups: number[]): string | null {
-  const isMapped = groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff;
-  const isCompatible = groups.slice(0, 6).every((g) => g === 0);
-  if (!isMapped && !isCompatible) return null;
-  const high = groups[6] ?? 0;
-  const low = groups[7] ?? 0;
+function groupsToIPv4(high: number, low: number): string {
   return [(high >>> 8) & 0xff, high & 0xff, (low >>> 8) & 0xff, low & 0xff].join(".");
 }
 
-function matches(rawIp: string, v4Cidrs: Cidr4[], v6Cidrs: Cidr6[]): boolean {
-  const ip = rawIp.startsWith("[") && rawIp.endsWith("]") ? rawIp.slice(1, -1) : rawIp;
+/**
+ * Returns the IPv4 address embedded in an IPv6 address by a translation or
+ * transition mechanism, so it can be range-checked as IPv4: IPv4-mapped
+ * (::ffff:0:0/96), IPv4-compatible (::/96), NAT64 well-known prefix (64:ff9b::/96)
+ * and 6to4 (2002::/16, IPv4 in bits 16-47). Without this, 64:ff9b::a9fe:a9fe
+ * reaches 169.254.169.254 on any network with a NAT64 gateway.
+ */
+function unwrapEmbeddedIPv4(groups: number[]): string | null {
+  const g = (i: number): number => groups[i] ?? 0;
+  const zeroFrom1To4 = g(1) === 0 && g(2) === 0 && g(3) === 0 && g(4) === 0;
 
-  if (isIPv4(ip)) {
-    const asInt = ipv4ToInt(ip);
-    return v4Cidrs.some((cidr) => isInCidr4(asInt, cidr));
+  // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d)
+  if (g(0) === 0 && zeroFrom1To4 && (g(5) === 0xffff || g(5) === 0)) {
+    return groupsToIPv4(g(6), g(7));
+  }
+  // NAT64 well-known prefix (64:ff9b::a.b.c.d)
+  if (
+    g(0) === 0x64 &&
+    g(1) === 0xff9b &&
+    g(2) === 0 &&
+    g(3) === 0 &&
+    g(4) === 0 &&
+    g(5) === 0
+  ) {
+    return groupsToIPv4(g(6), g(7));
+  }
+  // 6to4 (2002:aabb:ccdd::/48)
+  if (g(0) === 0x2002) return groupsToIPv4(g(1), g(2));
+  return null;
+}
+
+function classifyIPv4(ip: string): IpClass {
+  const asInt = ipv4ToInt(ip);
+  if (FORBIDDEN_IPV4_CIDRS.some((cidr) => isInCidr4(asInt, cidr))) return "forbidden";
+  if (PRIVATE_IPV4_CIDRS.some((cidr) => isInCidr4(asInt, cidr))) return "private";
+  return "public";
+}
+
+function classifyIPv6(ip: string): IpClass {
+  const groups = expandIPv6Groups(ip);
+  if (!groups) return "forbidden"; // fail closed on unparseable IPv6
+
+  const asBigInt = groupsToBigInt(groups);
+  if (FORBIDDEN_IPV6_CIDRS.some((cidr) => isInCidr6(asBigInt, cidr))) return "forbidden";
+
+  const embeddedIPv4 = unwrapEmbeddedIPv4(groups);
+  if (embeddedIPv4) {
+    // ::1 and :: are IPv4-compatible in form but are IPv6 loopback/unspecified;
+    // both classify as private either way, so no special case is needed.
+    return classifyIPv4(embeddedIPv4);
   }
 
-  if (isIPv6(ip)) {
-    const groups = expandIPv6Groups(ip);
-    if (!groups) return true; // fail closed on unparseable IPv6
-
-    const embeddedIPv4 = unwrapEmbeddedIPv4(groups);
-    if (embeddedIPv4 && matches(embeddedIPv4, v4Cidrs, v6Cidrs)) return true;
-
-    const asBigInt = groupsToBigInt(groups);
-    return v6Cidrs.some((cidr) => isInCidr6(asBigInt, cidr));
-  }
-
-  // Not a recognizable IP literal at all — fail closed.
-  return true;
+  if (PRIVATE_IPV6_CIDRS.some((cidr) => isInCidr6(asBigInt, cidr))) return "private";
+  // Only global unicast is public; anything else (site-local, discard-only,
+  // unassigned space, NAT64 local-use 64:ff9b:1::/48, ...) is non-global.
+  return isInCidr6(asBigInt, GLOBAL_UNICAST_IPV6) ? "public" : "private";
 }
 
 /**
- * Validates a single resolved IP address (never a hostname) against every blocked
- * range, including the always-blocked tier. This is the check used when
- * SAFE_FETCH_ALLOW_LOCAL is false. Fails closed on anything unparseable.
+ * Classifies a single resolved IP address (never a hostname). Anything that is not
+ * a recognizable IPv4/IPv6 literal is "forbidden" — fail closed.
+ */
+export function classifyIp(rawIp: string): IpClass {
+  const ip = rawIp.startsWith("[") && rawIp.endsWith("]") ? rawIp.slice(1, -1) : rawIp;
+  const zoneless = ip.includes("%") ? ip.slice(0, ip.indexOf("%")) : ip;
+  if (isIPv4(zoneless)) return classifyIPv4(zoneless);
+  if (isIPv6(ip)) return classifyIPv6(ip);
+  return "forbidden";
+}
+
+/**
+ * True for every non-public address, including the forbidden tier. This is the
+ * check used when SAFE_FETCH_ALLOW_LOCAL is false.
  */
 export function isBlockedIp(rawIp: string): boolean {
-  return (
-    matches(rawIp, LOCAL_IPV4_CIDRS, LOCAL_IPV6_CIDRS) ||
-    matches(rawIp, ALWAYS_BLOCKED_IPV4_CIDRS, ALWAYS_BLOCKED_IPV6_CIDRS)
-  );
+  return classifyIp(rawIp) !== "public";
 }
 
 /**
- * Validates against only the never-bypassable tier (link-local / cloud metadata).
- * Callers must run this check unconditionally, even when SAFE_FETCH_ALLOW_LOCAL is
- * true — "let me hit my local dev server" must never imply "let me query cloud
- * instance metadata".
+ * True only for the never-bypassable tier (metadata, link-local, multicast,
+ * reserved). Callers must run this check unconditionally, even when
+ * SAFE_FETCH_ALLOW_LOCAL is true — "let me hit my local dev server" must never
+ * imply "let me query cloud instance metadata".
  */
 export function isAlwaysBlockedIp(rawIp: string): boolean {
-  return matches(rawIp, ALWAYS_BLOCKED_IPV4_CIDRS, ALWAYS_BLOCKED_IPV6_CIDRS);
+  return classifyIp(rawIp) === "forbidden";
 }
