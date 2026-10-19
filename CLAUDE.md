@@ -74,15 +74,17 @@ See `.claude/skills/writing-mcp-servers/SKILL.md`.
 ## Commands
 
 ```bash
-npm install            # install deps (verify SDK version on first run)
-npm run build          # tsc → dist/
+npm ci                 # install deps from the lockfile
+npm run check          # everything CI runs: format:check, lint, typecheck, build, test
+npm run typecheck      # tsc --noEmit over src/ AND test/ (tsconfig.json)
+npm run build          # tsc -p tsconfig.build.json → dist/ (src only)
 npm run dev            # watch mode
 npm start              # run compiled server (stdio)
 npm run start:http     # run over Streamable HTTP (127.0.0.1:3000/mcp)
 TRANSPORT=http npm start   # equivalent, POSIX shells only (not PowerShell/cmd.exe)
 npm test               # vitest — all SSRF specs must pass
 npm run lint           # eslint
-npm run format         # prettier
+npm run format         # prettier --write (format:check is what CI runs)
 npm run inspector      # npx @modelcontextprotocol/inspector for manual testing
 ```
 
