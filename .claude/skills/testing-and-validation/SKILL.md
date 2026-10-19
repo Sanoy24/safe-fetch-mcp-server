@@ -31,31 +31,27 @@ test for **every row** of the threat matrix in the security skill. Minimum set:
 ### Example (Vitest)
 
 ```ts
-import { describe, it, expect } from 'vitest';
-import { assertSafeUrl } from '../src/security/index.js';
+import { describe, it, expect } from "vitest";
+import { assertSafeUrl } from "../src/security/index.js";
 
-describe('SSRF guard', () => {
-    it('refuses the cloud metadata endpoint', async () => {
-        await expect(
-            assertSafeUrl('http://169.254.169.254/latest/meta-data/'),
-        ).rejects.toThrow();
-    });
+describe("SSRF guard", () => {
+  it("refuses the cloud metadata endpoint", async () => {
+    await expect(
+      assertSafeUrl("http://169.254.169.254/latest/meta-data/")
+    ).rejects.toThrow();
+  });
 
-    it('refuses IPv4-mapped IPv6 loopback', async () => {
-        await expect(
-            assertSafeUrl('http://[::ffff:127.0.0.1]/'),
-        ).rejects.toThrow();
-    });
+  it("refuses IPv4-mapped IPv6 loopback", async () => {
+    await expect(assertSafeUrl("http://[::ffff:127.0.0.1]/")).rejects.toThrow();
+  });
 
-    it('re-validates each redirect hop', async () => {
-        // Spin up a local server that 302s to http://127.0.0.1 and assert the fetch is refused.
-    });
+  it("re-validates each redirect hop", async () => {
+    // Spin up a local server that 302s to http://127.0.0.1 and assert the fetch is refused.
+  });
 
-    it('allows a normal public URL', async () => {
-        await expect(
-            assertSafeUrl('https://example.com'),
-        ).resolves.toBeTruthy();
-    });
+  it("allows a normal public URL", async () => {
+    await expect(assertSafeUrl("https://example.com")).resolves.toBeTruthy();
+  });
 });
 ```
 

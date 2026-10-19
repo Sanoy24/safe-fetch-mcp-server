@@ -7,7 +7,7 @@
 
 An MCP server that fetches web content for an agent and is **correct and secure**
 where the popular fetch servers are not. Not "has SSRF protection" — everyone
-claims that — but *provably correct* against the edge cases that produced real
+claims that — but _provably correct_ against the edge cases that produced real
 2026 CVEs in other fetch servers, verified against the OWASP MCP Top 10 and an
 independent scanner. See [`SECURITY.md`](SECURITY.md) for the full evidence trail.
 
@@ -18,7 +18,7 @@ independent scanner. See [`SECURITY.md`](SECURITY.md) for the full evidence trai
 - "Secure" community servers keep failing on the hard edge cases: an IPv6
   check that misses IPv4-mapped loopback (`::ffff:127.0.0.1`), a poller that
   re-fetches a URL through a different code path than the one that was guarded.
-- Correct SSRF defense — resolve once, validate the *resolved IP* against
+- Correct SSRF defense — resolve once, validate the _resolved IP_ against
   explicit ranges, pin the connection to that exact IP, re-validate on every
   redirect — is genuinely hard to get right. Doing it right, and proving it, is
   the whole point of this project.
@@ -78,7 +78,7 @@ poller) was a real 2026 CVE.
 1. **Zod validation** rejects malformed input immediately.
 2. **`urlPolicy`** enforces the scheme allowlist (`http`/`https` only) and
    rejects embedded userinfo (`user:pass@host`).
-3. **`resolveAndPin`** resolves the hostname once, validates *every* resolved
+3. **`resolveAndPin`** resolves the hostname once, validates _every_ resolved
    IP against explicit blocked ranges, then pins the connection to that exact
    IP — this is what defeats DNS rebinding.
 4. **Blocked?** → refuse with an actionable error, never a stack trace.
@@ -92,38 +92,38 @@ poller) was a real 2026 CVE.
 
 ## SSRF threat matrix
 
-| Attack | Defense |
-| --- | --- |
-| Cloud metadata (`169.254.169.254`) | Blocked on resolved IP, **never** bypassable via `SAFE_FETCH_ALLOW_LOCAL` |
-| Private ranges (RFC-1918) | Blocked on resolved IP; bypassable via `SAFE_FETCH_ALLOW_LOCAL` for trusted local dev |
-| Loopback (`127.0.0.1`, `127.x.x.x`, `::1`) | Blocked on resolved IP after normalization |
-| IPv4-mapped IPv6 (`::ffff:127.0.0.1`) | IPv6 unwrapped, embedded IPv4 re-checked |
-| IPv6 ULA / link-local (`fc00::/7`, `fe80::/10`) | Blocked on resolved IP |
-| Encoded IPs (octal/hex/decimal/dotless) | Not string-parsed — validated post-resolution, on the canonical IP |
-| DNS rebinding | Resolved once; connection **pinned** to that exact IP via a custom DNS `lookup` hook |
-| Redirect-to-internal | Every hop re-runs the full guard from scratch |
-| Non-http(s) schemes (`file:`, `gopher:`, ...) | Scheme allowlist |
-| Credentials in URL | Userinfo rejected outright |
-| Resource exhaustion | Byte cap + connect/idle/total timeouts |
+| Attack                                          | Defense                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Cloud metadata (`169.254.169.254`)              | Blocked on resolved IP, **never** bypassable via `SAFE_FETCH_ALLOW_LOCAL`             |
+| Private ranges (RFC-1918)                       | Blocked on resolved IP; bypassable via `SAFE_FETCH_ALLOW_LOCAL` for trusted local dev |
+| Loopback (`127.0.0.1`, `127.x.x.x`, `::1`)      | Blocked on resolved IP after normalization                                            |
+| IPv4-mapped IPv6 (`::ffff:127.0.0.1`)           | IPv6 unwrapped, embedded IPv4 re-checked                                              |
+| IPv6 ULA / link-local (`fc00::/7`, `fe80::/10`) | Blocked on resolved IP                                                                |
+| Encoded IPs (octal/hex/decimal/dotless)         | Not string-parsed — validated post-resolution, on the canonical IP                    |
+| DNS rebinding                                   | Resolved once; connection **pinned** to that exact IP via a custom DNS `lookup` hook  |
+| Redirect-to-internal                            | Every hop re-runs the full guard from scratch                                         |
+| Non-http(s) schemes (`file:`, `gopher:`, ...)   | Scheme allowlist                                                                      |
+| Credentials in URL                              | Userinfo rejected outright                                                            |
+| Resource exhaustion                             | Byte cap + connect/idle/total timeouts                                                |
 
 Full matrix, control flow, and rationale:
 [`.claude/skills/secure-fetch-ssrf/SKILL.md`](.claude/skills/secure-fetch-ssrf/SKILL.md).
 
 ## Configuration
 
-| Env var | Default | Meaning |
-| --- | --- | --- |
-| `SAFE_FETCH_ALLOW_LOCAL` | `false` | Allow loopback/RFC-1918 targets (never allows metadata/link-local) |
-| `SAFE_FETCH_ALLOWLIST` | *(empty)* | Comma-separated host allowlist |
-| `SAFE_FETCH_MAX_BYTES` | `5000000` | Response size cap |
-| `SAFE_FETCH_TIMEOUT_MS` | `10000` | Request timeout |
-| `SAFE_FETCH_MAX_REDIRECTS` | `5` | Redirect hop limit |
-| `TRANSPORT` / `--http` flag | stdio | Switch to Streamable HTTP |
-| `HOST` | `127.0.0.1` | HTTP bind address |
-| `PORT` | `3000` | HTTP port |
-| `SAFE_FETCH_ALLOWED_ORIGINS` | *(empty)* | Comma-separated Origin allowlist (CORS) for HTTP mode |
-| `SAFE_FETCH_RATE_LIMIT_MAX` | `60` | Requests per window, per IP (HTTP mode) |
-| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS` | `60000` | Rate-limit window |
+| Env var                           | Default     | Meaning                                                            |
+| --------------------------------- | ----------- | ------------------------------------------------------------------ |
+| `SAFE_FETCH_ALLOW_LOCAL`          | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local) |
+| `SAFE_FETCH_ALLOWLIST`            | _(empty)_   | Comma-separated host allowlist                                     |
+| `SAFE_FETCH_MAX_BYTES`            | `5000000`   | Response size cap                                                  |
+| `SAFE_FETCH_TIMEOUT_MS`           | `10000`     | Request timeout                                                    |
+| `SAFE_FETCH_MAX_REDIRECTS`        | `5`         | Redirect hop limit                                                 |
+| `TRANSPORT` / `--http` flag       | stdio       | Switch to Streamable HTTP                                          |
+| `HOST`                            | `127.0.0.1` | HTTP bind address                                                  |
+| `PORT`                            | `3000`      | HTTP port                                                          |
+| `SAFE_FETCH_ALLOWED_ORIGINS`      | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode              |
+| `SAFE_FETCH_RATE_LIMIT_MAX`       | `60`        | Requests per window, per IP (HTTP mode)                            |
+| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS` | `60000`     | Rate-limit window                                                  |
 
 ## Development
 

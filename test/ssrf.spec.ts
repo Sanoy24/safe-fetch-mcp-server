@@ -32,7 +32,9 @@ describe("assertSafeUrl / safeFetch — SSRF guard", () => {
   });
 
   it("refuses IPv4-mapped IPv6 loopback", async () => {
-    await expect(assertSafeUrl("http://[::ffff:127.0.0.1]/", testConfig())).rejects.toThrow();
+    await expect(
+      assertSafeUrl("http://[::ffff:127.0.0.1]/", testConfig())
+    ).rejects.toThrow();
   });
 
   it("refuses IPv6 loopback and ULA", async () => {
@@ -41,19 +43,27 @@ describe("assertSafeUrl / safeFetch — SSRF guard", () => {
   });
 
   it("refuses non-http(s) schemes", async () => {
-    await expect(assertSafeUrl("file:///etc/passwd", testConfig())).rejects.toThrow(UrlPolicyError);
-    await expect(assertSafeUrl("gopher://127.0.0.1/", testConfig())).rejects.toThrow(UrlPolicyError);
-    await expect(assertSafeUrl("ftp://example.com/", testConfig())).rejects.toThrow(UrlPolicyError);
-  });
-
-  it("refuses URLs with embedded userinfo", async () => {
-    await expect(assertSafeUrl("http://user:pass@example.com/", testConfig())).rejects.toThrow(
+    await expect(assertSafeUrl("file:///etc/passwd", testConfig())).rejects.toThrow(
+      UrlPolicyError
+    );
+    await expect(assertSafeUrl("gopher://127.0.0.1/", testConfig())).rejects.toThrow(
+      UrlPolicyError
+    );
+    await expect(assertSafeUrl("ftp://example.com/", testConfig())).rejects.toThrow(
       UrlPolicyError
     );
   });
 
+  it("refuses URLs with embedded userinfo", async () => {
+    await expect(
+      assertSafeUrl("http://user:pass@example.com/", testConfig())
+    ).rejects.toThrow(UrlPolicyError);
+  });
+
   it("refuses an invalid URL", async () => {
-    await expect(assertSafeUrl("not a url", testConfig())).rejects.toThrow(UrlPolicyError);
+    await expect(assertSafeUrl("not a url", testConfig())).rejects.toThrow(
+      UrlPolicyError
+    );
   });
 
   describe("encoded-IP bypasses (rely on WHATWG URL host normalization)", () => {
@@ -99,7 +109,10 @@ describe("safeFetch — hermetic happy path (local fixture, ALLOW_LOCAL opt-in)"
     await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as AddressInfo).port;
 
-    const result = await safeFetch(`http://127.0.0.1:${port}/`, testConfig({ allowLocal: true }));
+    const result = await safeFetch(
+      `http://127.0.0.1:${port}/`,
+      testConfig({ allowLocal: true })
+    );
 
     expect(result.status).toBe(200);
     expect(result.body.toString("utf-8")).toBe("hello from fixture");

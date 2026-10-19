@@ -48,9 +48,13 @@ export interface FetchUrlToolResult {
   [key: string]: unknown;
 }
 
-function isRefusal(err: unknown): err is UrlPolicyError | ResolutionError | SafeFetchError {
+function isRefusal(
+  err: unknown
+): err is UrlPolicyError | ResolutionError | SafeFetchError {
   return (
-    err instanceof UrlPolicyError || err instanceof ResolutionError || err instanceof SafeFetchError
+    err instanceof UrlPolicyError ||
+    err instanceof ResolutionError ||
+    err instanceof SafeFetchError
   );
 }
 
@@ -78,7 +82,9 @@ export async function runFetchUrl(
   }
 
   const cfg: SafeFetchConfig =
-    input.max_bytes !== undefined ? { ...baseConfig, maxBytes: input.max_bytes } : baseConfig;
+    input.max_bytes !== undefined
+      ? { ...baseConfig, maxBytes: input.max_bytes }
+      : baseConfig;
 
   try {
     const result = await safeFetch(input.url, cfg);
@@ -107,7 +113,9 @@ export async function runFetchUrl(
       }
     };
   } catch (err) {
-    const message = isRefusal(err) ? err.message : "Refused: the request could not be completed.";
+    const message = isRefusal(err)
+      ? err.message
+      : "Refused: the request could not be completed.";
     console.error(`[fetch_url] url=${input.url} outcome=refused reason="${message}"`);
     return { isError: true, content: [{ type: "text", text: message }] };
   }

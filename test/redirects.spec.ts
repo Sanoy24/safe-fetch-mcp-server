@@ -62,7 +62,10 @@ describe("redirect handling — per-hop re-validation", () => {
     });
 
     await expect(
-      safeFetch(`http://127.0.0.1:${port}/0`, testConfig({ allowLocal: true, maxRedirects: 2 }))
+      safeFetch(
+        `http://127.0.0.1:${port}/0`,
+        testConfig({ allowLocal: true, maxRedirects: 2 })
+      )
     ).rejects.toThrow(SafeFetchError);
   });
 

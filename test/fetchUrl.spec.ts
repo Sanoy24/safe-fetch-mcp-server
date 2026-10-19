@@ -52,7 +52,10 @@ describe("runFetchUrl", () => {
     await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const port = (server.address() as AddressInfo).port;
 
-    await runFetchUrl({ url: `http://127.0.0.1:${port}/` }, testConfig({ allowLocal: true }));
+    await runFetchUrl(
+      { url: `http://127.0.0.1:${port}/` },
+      testConfig({ allowLocal: true })
+    );
 
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("outcome=allowed"));
   });

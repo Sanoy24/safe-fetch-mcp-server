@@ -70,7 +70,11 @@ export async function resolveAndPin(
   const lookup: LookupFunction = (
     _host: string,
     options: LookupOptions,
-    callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void
+    callback: (
+      err: NodeJS.ErrnoException | null,
+      address: string | LookupAddress[],
+      family?: number
+    ) => void
   ) => {
     // Node's HTTP client requests { all: true } when Happy Eyeballs
     // (autoSelectFamily) is active and expects an array back in that case — a bare

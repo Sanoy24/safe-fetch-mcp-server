@@ -103,7 +103,9 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
     }
   });
 
-  const respondMethodNotAllowed = (res: { status: (code: number) => { json: (body: unknown) => void } }): void => {
+  const respondMethodNotAllowed = (res: {
+    status: (code: number) => { json: (body: unknown) => void };
+  }): void => {
     res.status(405).json({
       jsonrpc: "2.0",
       error: { code: -32000, message: "Method not allowed." },

@@ -11,7 +11,10 @@ export type { SafeFetchResult, SafeFetchConfig };
  * (UrlPolicyError | ResolutionError) on any violation. Used for static checks and
  * as the first hop of safeFetch.
  */
-export async function assertSafeUrl(rawUrl: string, cfg: SafeFetchConfig = defaultConfig): Promise<URL> {
+export async function assertSafeUrl(
+  rawUrl: string,
+  cfg: SafeFetchConfig = defaultConfig
+): Promise<URL> {
   const url = parseAndValidateUrl(rawUrl, cfg.allowlist);
   await resolveAndPin(url.hostname, cfg.allowLocal);
   return url;

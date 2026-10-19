@@ -92,7 +92,9 @@ function performPinnedRequest(
         });
 
         res.on("error", (err) => {
-          settleReject(new SafeFetchError(`Refused: response stream error: ${err.message}`));
+          settleReject(
+            new SafeFetchError(`Refused: response stream error: ${err.message}`)
+          );
         });
       }
     );
@@ -100,12 +102,18 @@ function performPinnedRequest(
     req.on("timeout", () => {
       req.destroy();
       settleReject(
-        new SafeFetchError(`Refused: request to "${pinned.hostname}" timed out after ${cfg.timeoutMs}ms.`)
+        new SafeFetchError(
+          `Refused: request to "${pinned.hostname}" timed out after ${cfg.timeoutMs}ms.`
+        )
       );
     });
 
     req.on("error", (err) => {
-      settleReject(new SafeFetchError(`Refused: request to "${pinned.hostname}" failed: ${err.message}`));
+      settleReject(
+        new SafeFetchError(
+          `Refused: request to "${pinned.hostname}" failed: ${err.message}`
+        )
+      );
     });
 
     req.end();
@@ -139,7 +147,9 @@ export async function fetchWithRedirects(
       }
       redirectCount += 1;
       if (redirectCount > cfg.maxRedirects) {
-        throw new SafeFetchError(`Refused: exceeded maximum of ${cfg.maxRedirects} redirects.`);
+        throw new SafeFetchError(
+          `Refused: exceeded maximum of ${cfg.maxRedirects} redirects.`
+        );
       }
       currentUrl = new URL(location, url).toString();
       continue;

@@ -6,10 +6,7 @@ export class UrlPolicyError extends Error {}
  * Structural checks that don't require DNS: scheme allowlist, userinfo rejection,
  * and (if configured) a host allowlist. Does not touch the network.
  */
-export function parseAndValidateUrl(
-  rawUrl: string,
-  allowlist: readonly string[]
-): URL {
+export function parseAndValidateUrl(rawUrl: string, allowlist: readonly string[]): URL {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -32,9 +29,7 @@ export function parseAndValidateUrl(
   if (allowlist.length > 0) {
     const host = url.hostname.toLowerCase();
     if (!allowlist.includes(host)) {
-      throw new UrlPolicyError(
-        `Refused: host "${host}" is not in SAFE_FETCH_ALLOWLIST.`
-      );
+      throw new UrlPolicyError(`Refused: host "${host}" is not in SAFE_FETCH_ALLOWLIST.`);
     }
   }
 

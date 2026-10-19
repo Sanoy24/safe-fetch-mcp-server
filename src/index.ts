@@ -39,7 +39,8 @@ async function startHttp(): Promise<void> {
 async function main(): Promise<void> {
   // --http is a shell-agnostic alternative to TRANSPORT=http (which only works as an
   // inline env-var prefix in POSIX shells, not PowerShell/cmd.exe).
-  const wantsHttp = process.env["TRANSPORT"] === "http" || process.argv.includes("--http");
+  const wantsHttp =
+    process.env["TRANSPORT"] === "http" || process.argv.includes("--http");
   if (wantsHttp) {
     await startHttp();
   } else {
