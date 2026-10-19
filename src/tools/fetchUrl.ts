@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getConfig, type SafeFetchConfig } from "../config.js";
+import { auditLog } from "../auditLog.js";
 import { safeFetch } from "../security/index.js";
 import {
   FETCH_ERROR_CODES,
@@ -72,6 +73,12 @@ export const FetchUrlOutput = z.object({
     .nullable()
     .optional()
     .describe("Pass as start_index to read the next chunk; null when nothing is left."),
+  fromCache: z
+    .boolean()
+    .optional()
+    .describe(
+      "True if served from the server's response cache (SAFE_FETCH_CACHE_TTL_MS)."
+    ),
   error: z
     .object({
       code: z.enum(FETCH_ERROR_CODES).describe("Stable failure category."),
@@ -149,9 +156,12 @@ export async function runFetchUrl(
     const result = await safeFetch(input.url, cfg);
 
     if (!isTextualContentType(result.contentType)) {
-      console.error(
-        `[fetch_url] url=${logUrl} outcome=refused reason="unsupported content type" contentType="${result.contentType}"`
-      );
+      auditLog(cfg, {
+        url: logUrl,
+        outcome: "refused",
+        code: "UNSUPPORTED_CONTENT_TYPE",
+        contentType: result.contentType
+      });
       return errorResult(
         "UNSUPPORTED_CONTENT_TYPE",
         `Refused: "${result.contentType}" is not a text content type. fetch_url only returns text (HTML, plain text, JSON, XML).`
@@ -172,9 +182,14 @@ export async function runFetchUrl(
 
     // Audit trail (OWASP MCP08:2025, Lack of Audit and Telemetry): every outcome —
     // allowed or refused — is logged to stderr with enough detail for SSRF forensics.
-    console.error(
-      `[fetch_url] url=${logUrl} outcome=allowed status=${result.status} bytes=${result.body.byteLength} truncated=${result.truncated}`
-    );
+    auditLog(cfg, {
+      url: logUrl,
+      outcome: "allowed",
+      status: result.status,
+      bytes: result.body.byteLength,
+      truncated: result.truncated,
+      fromCache: result.fromCache === true
+    });
 
     return {
       content: [{ type: "text", text: frameAsUntrustedData(chunk, result.finalUrl) }],
@@ -186,7 +201,8 @@ export async function runFetchUrl(
         truncated: result.truncated,
         totalChars: text.length,
         startIndex: start,
-        nextStartIndex
+        nextStartIndex,
+        fromCache: result.fromCache === true
       }
     };
   } catch (err) {
@@ -199,10 +215,13 @@ export async function runFetchUrl(
       err instanceof Error
         ? String(err.cause ?? (known ? "" : err.message))
         : String(err);
-    console.error(
-      `[fetch_url] url=${logUrl} outcome=refused code=${code} reason="${message}"` +
-        (detail ? ` detail="${detail}"` : "")
-    );
+    auditLog(cfg, {
+      url: logUrl,
+      outcome: "refused",
+      code,
+      reason: message,
+      detail: detail || undefined
+    });
     return errorResult(code, message);
   }
 }

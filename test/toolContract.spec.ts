@@ -3,6 +3,7 @@ import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { runFetchUrl, FetchUrlOutput, DEFAULT_MAX_CHARS } from "../src/tools/fetchUrl.js";
 import type { SafeFetchConfig } from "../src/config.js";
+import { clearResponseCache } from "../src/security/responseCache.js";
 
 // The fetch_url result contract: stable, machine-readable error codes and
 // structuredContent that always conforms to the declared outputSchema.
@@ -260,5 +261,55 @@ describe("audit log", () => {
     expect(logged).toContain("token=REDACTED");
     expect(logged).not.toContain("s3cret");
     expect(logged).not.toContain("#frag");
+  });
+});
+
+describe("Phase 5 options through the tool", () => {
+  it("reports fromCache when the response cache served the result", async () => {
+    clearResponseCache();
+    const base = await serve((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("cached?");
+    });
+    const cfg = testConfig({
+      cache: { ttlMs: 60_000, maxEntries: 10, maxBytes: 100_000 }
+    });
+
+    const first = await runFetchUrl({ url: `${base}/` }, cfg);
+    const second = await runFetchUrl({ url: `${base}/` }, cfg);
+
+    expect(first.structuredContent?.fromCache).toBe(false);
+    expect(second.structuredContent?.fromCache).toBe(true);
+    expect(FetchUrlOutput.strict().safeParse(second.structuredContent).success).toBe(
+      true
+    );
+    clearResponseCache();
+  });
+
+  it("writes one parseable JSON audit line per call when logFormat is json", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const base = await serve((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("ok");
+    });
+
+    await runFetchUrl(
+      { url: `${base}/x?token=s3cret` },
+      testConfig({ logFormat: "json" })
+    );
+    await runFetchUrl({ url: "file:///etc/passwd" }, testConfig({ logFormat: "json" }));
+
+    const lines = spy.mock.calls.map(
+      (args) => JSON.parse(String(args[0])) as Record<string, unknown>
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({
+      event: "fetch_url",
+      outcome: "allowed",
+      status: 200
+    });
+    expect(String(lines[0]?.["url"])).toContain("token=REDACTED");
+    expect(JSON.stringify(lines)).not.toContain("s3cret");
+    expect(lines[1]).toMatchObject({ outcome: "refused", code: "POLICY_REJECTED" });
   });
 });

@@ -84,6 +84,8 @@ describe("Streamable HTTP transport", () => {
       body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 })
     });
     expect(response.status).toBe(403);
+    // The rejected value is attacker-supplied; it is not reflected back.
+    expect(await response.text()).not.toContain("evil.example");
   });
 
   it("rejects a request with a spoofed Host header (DNS-rebinding protection)", async () => {

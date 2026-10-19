@@ -53,7 +53,7 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
     if (!httpConfig.allowedOrigins.includes(origin.toLowerCase())) {
       res.status(403).json({
         jsonrpc: "2.0",
-        error: { code: -32000, message: `Origin not allowed: ${origin}` },
+        error: { code: -32000, message: "Origin not allowed." },
         id: null
       });
       return;
