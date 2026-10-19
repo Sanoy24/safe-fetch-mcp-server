@@ -25,9 +25,13 @@ Where that goes:
 | -------------- | ------------------------------------------------------------------------------------------- |
 | Claude Code    | `claude mcp add safe-fetch -- npx -y safe-fetch-mcp-server`, or `.mcp.json` in your project |
 | Claude Desktop | Settings → Developer → Edit Config (`claude_desktop_config.json`)                           |
+| Codex          | `codex mcp add safe-fetch -- npx -y safe-fetch-mcp-server`, or `~/.codex/config.toml`       |
 | Other clients  | The client's MCP server config. Use the same `command` and `args`                           |
 
 Restart the client. A `fetch_url` tool should appear.
+
+Exact steps for Claude Code, Claude Desktop, Codex, VS Code, Cursor and Windsurf are in the
+[README install section](https://github.com/Sanoy24/safe-fetch-mcp-server#install).
 
 ## 2. Install the skill
 
