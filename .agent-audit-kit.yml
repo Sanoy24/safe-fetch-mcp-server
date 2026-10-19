@@ -11,8 +11,10 @@
 # MCP server at all.
 accepts_stdio_risk: true
 justification: >
-  No OS command execution or subprocess spawning exists anywhere in this
-  repository (verified: no child_process/execFile/spawn/exec usage in src/).
+  No OS command execution or subprocess spawning exists in the server
+  (verified: no child_process/execFile/spawn/exec usage in src/). The only
+  child_process use is in scripts/ (release and smoke-test tooling run by
+  maintainers and CI), which is not part of the published package.
   fetch_url's only side effect is an HTTP(S) fetch through the hardened
   security/ guard (see .claude/skills/secure-fetch-ssrf/SKILL.md). The
   command-injection-via-unsanitized-argv risk this rule targets has no
