@@ -17,7 +17,7 @@ TypeScript conventions), including what is out of scope.
 
 ## Setup
 
-Requires Node 20+ (the version in `.nvmrc` is the one used for development).
+Requires Node 22+ (the version in `.nvmrc` is the one used for development).
 
 ```bash
 npm ci
