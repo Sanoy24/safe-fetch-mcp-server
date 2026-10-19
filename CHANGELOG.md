@@ -6,6 +6,17 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Stable error codes: failures return `structuredContent.error = { code, retryable }`
+  (`POLICY_REJECTED`, `TIMEOUT`, `DNS_RESOLUTION_FAILED`, ...). Policy rejections
+  are never retryable.
+- `fetch_url` declares an `outputSchema`.
+- Paging: a new `max_chars` argument (default 20000), plus `totalChars`, `startIndex`
+  and `nextStartIndex` in results, and a continuation note in the text.
+- A startup warning when HTTP mode binds a non-loopback address.
+- Graceful shutdown on SIGINT/SIGTERM in HTTP mode.
+
 ### Security
 
 - Block Alibaba Cloud metadata (`100.100.100.200`), which was fetchable under the
@@ -25,10 +36,22 @@ this project follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - The `Host` header now includes a non-default port.
+- Non-text responses (images, PDFs, ...) are refused with `UNSUPPORTED_CONTENT_TYPE`.
+  They used to be returned as garbled text.
+- Bodies are decoded with the declared `charset` instead of always as UTF-8.
+- `+json` / `+xml` types (RSS, Atom, JSON-LD, ...) are treated as text.
+- The server reports its real version instead of a hard-coded `0.1.0`.
+- The audit log redacts query-string values and fragments.
 
 ### Changed
 
 - **Node 22+ is now required** (Node 20 is end-of-life).
+- **Invalid environment variables now stop startup** with a message naming the
+  variable, instead of silently falling back to defaults.
+  `SAFE_FETCH_ALLOW_LOCAL` accepts `true`/`false`/`1`/`0`.
+- **`fetch_url` returns at most 20000 characters per call by default.** Use
+  `max_chars` / `start_index` to read more. `start_index` is now documented as a
+  character offset, which is how it always behaved.
 - Refusal message wording changed (see Security). Anything matching on the old
   text needs updating.
 

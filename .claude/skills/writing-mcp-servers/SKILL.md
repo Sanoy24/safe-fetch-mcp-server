@@ -50,13 +50,13 @@ export const FetchUrlInput = z
       .int()
       .positive()
       .optional()
-      .describe("Override the max response size for this call."),
+      .describe("Lower the max response size (bytes). Cannot exceed the server limit."),
     start_index: z
       .number()
       .int()
       .min(0)
       .default(0)
-      .describe("Byte offset for chunked reading of long pages.")
+      .describe("Character offset into the converted text; pass nextStartIndex to page.")
   })
   .strict();
 
@@ -76,7 +76,7 @@ server.registerTool(
   {
     title: "Fetch URL",
     description:
-      "Fetch an http(s) URL and return clean markdown. Read-only; refuses private/loopback/metadata targets by default. Args: url, format, max_bytes?, start_index?. Returns text plus structuredContent {status, finalUrl, contentType, bytes, truncated}.",
+      "Fetch a public http(s) URL and return markdown. Read-only; refuses private/loopback/metadata targets. Args: url, format, max_chars, start_index, max_bytes. Returns text plus structuredContent {status, finalUrl, ..., nextStartIndex}; on failure structuredContent.error {code, retryable}.",
     inputSchema: FetchUrlInput,
     annotations: {
       readOnlyHint: true,
@@ -105,20 +105,32 @@ return {
 
 ## Errors: in-result, actionable, non-leaky
 
-- Report tool errors inside the result with `isError: true` — not as protocol errors.
-- Messages must be actionable and must not leak stack traces or internal paths.
+- Report tool errors inside the result with `isError: true`, not as protocol errors.
+- Build every error result with the shared `errorResult(code, message)` in
+  `src/tools/fetchUrl.ts`. It sets `structuredContent.error = { code, retryable }`.
+  Codes are defined once in `src/security/errors.ts`; adding one is fine, renaming or
+  removing one breaks the contract.
+- Guard failures throw a `GuardError` subclass carrying its code. Don't map error
+  message strings to codes.
+- Messages must be actionable and must never contain resolved IPs, raw socket errors,
+  stack traces or internal paths (threat-model row 15). Put that detail in the
+  error's `cause`, which only the stderr audit log prints.
 
 ```ts
-return {
-  isError: true,
-  content: [
-    {
-      type: "text",
-      text: "Refused: URL resolved to private IP 10.0.0.5. Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets."
-    }
-  ]
-};
+throw new ResolutionError(
+  "POLICY_REJECTED",
+  `Refused: "${hostname}" resolves to a private or non-public address. ` +
+    "Set SAFE_FETCH_ALLOW_LOCAL=true only for trusted local targets.",
+  { cause: `resolved address=${addr.address}` }
+);
 ```
+
+## Output schema
+
+`fetch_url` declares `outputSchema: FetchUrlOutput`. Every field is optional so that both
+success and error `structuredContent` conform. When you add a field, add it to the
+schema with a `.describe()`, and extend the conformance test in
+`test/toolContract.spec.ts`.
 
 ## Transports
 
