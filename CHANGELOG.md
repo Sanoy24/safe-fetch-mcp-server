@@ -28,6 +28,7 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Node 22+ is now required** (Node 20 is end-of-life).
 - Refusal message wording changed (see Security). Anything matching on the old
   text needs updating.
 

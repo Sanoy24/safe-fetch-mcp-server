@@ -110,7 +110,7 @@ function isInCidr6(ip: bigint, cidr: Cidr6): boolean {
   return (ip & mask) === (cidr.base & mask);
 }
 
-// Row references are to the threat matrix in .claude/skills/secure-fetch-ssrf/SKILL.md.
+// Row references are to the threat matrix in docs/threat-model.md.
 // Ranges come from the IANA IPv4/IPv6 Special-Purpose Address Registries.
 //
 // Every address falls into exactly one of three classes, deliberately:
