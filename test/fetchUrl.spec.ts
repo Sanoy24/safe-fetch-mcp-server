@@ -60,6 +60,24 @@ describe("runFetchUrl", () => {
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("outcome=allowed"));
   });
 
+  it("lets max_bytes lower the operator's cap but never raise it", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("a".repeat(1_000));
+    });
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+    const cfg = testConfig({ allowLocal: true, maxBytes: 100 });
+
+    const raised = await runFetchUrl({ url, max_bytes: 10_000_000 }, cfg);
+    expect(raised.structuredContent?.bytes).toBe(100);
+    expect(raised.structuredContent?.truncated).toBe(true);
+
+    const lowered = await runFetchUrl({ url, max_bytes: 10 }, cfg);
+    expect(lowered.structuredContent?.bytes).toBe(10);
+  });
+
   it("logs an audit line to stderr on a refusal, without the untrusted-data framing", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
