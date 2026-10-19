@@ -92,38 +92,40 @@ poller) was a real 2026 CVE.
 
 ## SSRF threat matrix
 
-| Attack                                          | Defense                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Cloud metadata (`169.254.169.254`)              | Blocked on resolved IP, **never** bypassable via `SAFE_FETCH_ALLOW_LOCAL`             |
-| Private ranges (RFC-1918)                       | Blocked on resolved IP; bypassable via `SAFE_FETCH_ALLOW_LOCAL` for trusted local dev |
-| Loopback (`127.0.0.1`, `127.x.x.x`, `::1`)      | Blocked on resolved IP after normalization                                            |
-| IPv4-mapped IPv6 (`::ffff:127.0.0.1`)           | IPv6 unwrapped, embedded IPv4 re-checked                                              |
-| IPv6 ULA / link-local (`fc00::/7`, `fe80::/10`) | Blocked on resolved IP                                                                |
-| Encoded IPs (octal/hex/decimal/dotless)         | Not string-parsed — validated post-resolution, on the canonical IP                    |
-| DNS rebinding                                   | Resolved once; connection **pinned** to that exact IP via a custom DNS `lookup` hook  |
-| Redirect-to-internal                            | Every hop re-runs the full guard from scratch                                         |
-| Non-http(s) schemes (`file:`, `gopher:`, ...)   | Scheme allowlist                                                                      |
-| Credentials in URL                              | Userinfo rejected outright                                                            |
-| Resource exhaustion                             | Byte cap + connect/idle/total timeouts                                                |
+| Attack                                                                 | Defense                                                                                        |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Cloud metadata (`169.254.169.254`, `100.100.100.200`, `fd00:ec2::254`) | Blocked on resolved IP, **never** bypassable via `SAFE_FETCH_ALLOW_LOCAL`                      |
+| Private ranges (RFC-1918)                                              | Blocked on resolved IP; bypassable via `SAFE_FETCH_ALLOW_LOCAL` for trusted local dev          |
+| Loopback (`127.0.0.1`, `127.x.x.x`, `::1`)                             | Blocked on resolved IP after normalization                                                     |
+| IPv4-mapped IPv6 (`::ffff:127.0.0.1`)                                  | IPv6 unwrapped, embedded IPv4 re-checked                                                       |
+| NAT64 / 6to4 (`64:ff9b::a9fe:a9fe`, `2002:a9fe:a9fe::`)                | Embedded IPv4 unwrapped and re-checked                                                         |
+| CGNAT, multicast, reserved, benchmarking, documentation ranges         | Blocked on resolved IP (IANA special-purpose registries)                                       |
+| IPv6 ULA / link-local / non-global (`fc00::/7`, `fe80::/10`)           | Blocked on resolved IP; only global unicast (`2000::/3`) is public                             |
+| Encoded IPs (octal/hex/decimal/dotless)                                | Not string-parsed — validated post-resolution, on the canonical IP                             |
+| DNS rebinding                                                          | Resolved once; connection **pinned** to that exact IP via a custom DNS `lookup` hook           |
+| Redirect-to-internal                                                   | Every hop re-runs the full guard from scratch                                                  |
+| Non-http(s) schemes (`file:`, `gopher:`, ...)                          | Scheme allowlist                                                                               |
+| Credentials in URL                                                     | Userinfo rejected outright                                                                     |
+| Resource exhaustion (huge or slow-drip bodies)                         | Byte cap + one total deadline covering DNS, connect, headers and body across all redirect hops |
 
 Full matrix, control flow, and rationale:
 [`.claude/skills/secure-fetch-ssrf/SKILL.md`](.claude/skills/secure-fetch-ssrf/SKILL.md).
 
 ## Configuration
 
-| Env var                           | Default     | Meaning                                                            |
-| --------------------------------- | ----------- | ------------------------------------------------------------------ |
-| `SAFE_FETCH_ALLOW_LOCAL`          | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local) |
-| `SAFE_FETCH_ALLOWLIST`            | _(empty)_   | Comma-separated host allowlist                                     |
-| `SAFE_FETCH_MAX_BYTES`            | `5000000`   | Response size cap                                                  |
-| `SAFE_FETCH_TIMEOUT_MS`           | `10000`     | Request timeout                                                    |
-| `SAFE_FETCH_MAX_REDIRECTS`        | `5`         | Redirect hop limit                                                 |
-| `TRANSPORT` / `--http` flag       | stdio       | Switch to Streamable HTTP                                          |
-| `HOST`                            | `127.0.0.1` | HTTP bind address                                                  |
-| `PORT`                            | `3000`      | HTTP port                                                          |
-| `SAFE_FETCH_ALLOWED_ORIGINS`      | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode              |
-| `SAFE_FETCH_RATE_LIMIT_MAX`       | `60`        | Requests per window, per IP (HTTP mode)                            |
-| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS` | `60000`     | Rate-limit window                                                  |
+| Env var                           | Default     | Meaning                                                                         |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------- |
+| `SAFE_FETCH_ALLOW_LOCAL`          | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)              |
+| `SAFE_FETCH_ALLOWLIST`            | _(empty)_   | Comma-separated host allowlist                                                  |
+| `SAFE_FETCH_MAX_BYTES`            | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it |
+| `SAFE_FETCH_TIMEOUT_MS`           | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects           |
+| `SAFE_FETCH_MAX_REDIRECTS`        | `5`         | Redirect hop limit                                                              |
+| `TRANSPORT` / `--http` flag       | stdio       | Switch to Streamable HTTP                                                       |
+| `HOST`                            | `127.0.0.1` | HTTP bind address                                                               |
+| `PORT`                            | `3000`      | HTTP port                                                                       |
+| `SAFE_FETCH_ALLOWED_ORIGINS`      | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                           |
+| `SAFE_FETCH_RATE_LIMIT_MAX`       | `60`        | Requests per window, per IP (HTTP mode)                                         |
+| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS` | `60000`     | Rate-limit window                                                               |
 
 ## Development
 
