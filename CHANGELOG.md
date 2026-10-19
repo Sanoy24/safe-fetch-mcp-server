@@ -20,8 +20,9 @@ this project follows [Semantic Versioning](https://semver.org/).
 - Graceful shutdown on SIGINT/SIGTERM in HTTP mode.
 - `safe-web-fetch` companion agent skill (`skills/safe-web-fetch`), attached to
   each GitHub release as a zip.
-- Release workflow: npm trusted publishing with provenance, MCP Registry publish, and
-  a GitHub release, all from a version tag. See `RELEASING.md`.
+- Release workflows: npm staged publishing (trusted publisher, provenance, human
+  approval on npmjs.com), then a post-approval workflow that publishes to the MCP
+  Registry and creates the GitHub release. See `RELEASING.md`.
 - CI runs a clean-install smoke test: it packs the tarball, installs it in an empty
   directory, and drives the binary over stdio.
 

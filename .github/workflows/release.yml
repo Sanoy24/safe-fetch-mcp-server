@@ -1,8 +1,9 @@
 name: Release
 
 # Runs when a version tag is pushed: `git tag v0.2.0 && git push origin v0.2.0`.
-# One-time setup is described in RELEASING.md (npm trusted publisher + the
-# "release" environment).
+# It STAGES the version on npm; nothing goes live until a maintainer approves it on
+# npmjs.com (with 2FA). After approving, run the "Post-release" workflow.
+# One-time setup and the full sequence: RELEASING.md.
 
 on:
   push:
@@ -30,11 +31,9 @@ jobs:
       - run: node scripts/smoke-pack.mjs
       - run: npm audit --audit-level=moderate
 
-  publish-npm:
+  stage-npm:
     needs: verify
     runs-on: ubuntu-latest
-    # Add required reviewers to this environment (Settings → Environments) to make
-    # every publish wait for a manual approval.
     environment: release
     permissions:
       contents: read
@@ -45,50 +44,17 @@ jobs:
         with:
           node-version: 24.x
           registry-url: https://registry.npmjs.org
+      # Staged publishing needs npm >= 11.15.0; the runner's bundled npm may be older.
+      - run: npm install -g npm@^11.15.0
       - run: npm ci
       - run: npm run build
-      - run: npm publish --provenance --access public
-
-  publish-mcp-registry:
-    needs: publish-npm
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: read
-      id-token: write # GitHub OIDC login for the io.github.Sanoy24/* namespace
-    env:
-      # "latest" until pinned: set to a reviewed release tag of
-      # modelcontextprotocol/registry (e.g. "v1.2.3") to make releases reproducible.
-      MCP_PUBLISHER_VERSION: latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install mcp-publisher
+      # The trusted publisher is stage-only: a direct `npm publish` would be refused.
+      - run: npm stage publish --provenance --access public
+      - name: Next step
         run: |
-          if [ "$MCP_PUBLISHER_VERSION" = "latest" ]; then
-            base="https://github.com/modelcontextprotocol/registry/releases/latest/download"
-          else
-            base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
-          fi
-          curl -fsSL "${base}/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
-      - run: ./mcp-publisher login github-oidc
-      - run: ./mcp-publisher publish
-
-  github-release:
-    needs: publish-npm
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - run: node scripts/release-check.mjs --notes > release-notes.md
-      - name: Package the companion skill (SKILL.md at the zip root)
-        run: cd skills/safe-web-fetch && zip -r "${GITHUB_WORKSPACE}/safe-web-fetch-skill.zip" .
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "${GITHUB_REF_NAME}"
-          --title "${GITHUB_REF_NAME}"
-          --notes-file release-notes.md
-          --verify-tag
-          safe-web-fetch-skill.zip
+          {
+            echo "### Staged ${GITHUB_REF_NAME} on npm — not live yet"
+            echo ""
+            echo "1. Approve it on npmjs.com (or: \`npm stage approve safe-fetch-mcp-server@${GITHUB_REF_NAME#v}\`)."
+            echo "2. Then run the **Post-release** workflow for \`${GITHUB_REF_NAME}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
