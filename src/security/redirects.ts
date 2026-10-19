@@ -14,6 +14,10 @@ export interface SafeFetchResult {
   readonly contentType: string;
   readonly body: Buffer;
   readonly truncated: boolean;
+  /** Every URL requested, in order; the last one is finalUrl. */
+  readonly urlChain: readonly string[];
+  /** True when the body came from the response cache. */
+  readonly fromCache?: boolean;
   /** Cache validators and directives from the final response, if present. */
   readonly etag?: string;
   readonly lastModified?: string;
@@ -36,6 +40,8 @@ export interface SafeFetchOptions {
   readonly resolve?: Resolver;
   /** Used by the response cache to revalidate a stale entry. */
   readonly conditional?: ConditionalRequest;
+  /** Test seam: the cache's clock. */
+  readonly now?: () => number;
 }
 
 interface RawResponse {
@@ -252,9 +258,11 @@ export async function fetchWithRedirects(
   try {
     let currentUrl = rawUrl;
     let redirectCount = 0;
+    const urlChain: string[] = [];
 
     for (;;) {
       const url = parseAndValidateUrl(currentUrl, cfg);
+      urlChain.push(url.toString());
       const pinned = await untilAborted(
         resolveAndPin(url.hostname, cfg.allowLocal, options.resolve),
         signal,
@@ -306,6 +314,7 @@ export async function fetchWithRedirects(
       return {
         status: response.status,
         finalUrl: url.toString(),
+        urlChain,
         contentType,
         body: response.body,
         truncated: response.truncated,

@@ -1,8 +1,8 @@
 import { getConfig, type SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, ResolutionError } from "./resolveAndPin.js";
+import { fetchWithCache } from "./responseCache.js";
 import {
-  fetchWithRedirects,
   SafeFetchError,
   type SafeFetchOptions,
   type SafeFetchResult
@@ -40,5 +40,7 @@ export async function safeFetch(
   cfg: SafeFetchConfig = getConfig(),
   options: SafeFetchOptions = {}
 ): Promise<SafeFetchResult> {
-  return fetchWithRedirects(rawUrl, cfg, options);
+  // The optional cache wraps the single fetch path; it never makes requests itself
+  // and re-runs the guard on every hit (see responseCache.ts).
+  return fetchWithCache(rawUrl, cfg, options);
 }
