@@ -34,6 +34,34 @@ Listed on the [official MCP Registry](https://registry.modelcontextprotocol.io/)
 on [npm](https://www.npmjs.com/package/safe-fetch-mcp-server), and on
 [Glama](https://glama.ai/mcp/servers/Sanoy24/safe-fetch-mcp-server).
 
+### Switching from the reference `mcp-server-fetch`
+
+Add `--compat` and keep your prompts and agents unchanged. It adds a `fetch` tool with the
+same arguments (`url`, `max_length` default 5000, `start_index`, `raw`) and the same
+`fetch` prompt, running through this server's full guard:
+
+```diff
+ "fetch": {
+-  "command": "uvx",
+-  "args": ["mcp-server-fetch"]
++  "command": "npx",
++  "args": ["-y", "safe-fetch-mcp-server", "--compat"]
+ }
+```
+
+`--compat` is the same as `SAFE_FETCH_COMPAT_TOOL=true`. `fetch_url` stays available
+alongside `fetch`.
+
+What's different:
+
+- Private, loopback and cloud-metadata destinations are refused, including the bypass
+  classes in [`docs/test-vectors.md`](docs/test-vectors.md). That's the point of switching.
+- Results also include `structuredContent` (status, final URL, paging offsets, error codes),
+  and page text is framed as untrusted data.
+- **Not supported yet:** the reference server's robots.txt check and its
+  `--ignore-robots-txt`, `--user-agent` and `--proxy-url` flags. Unknown flags are ignored.
+  robots.txt, user-agent and proxy support are planned.
+
 ### Claude Code
 
 ```bash
@@ -279,26 +307,27 @@ fetch-server CVEs, all enforced in CI.
 
 ## Configuration
 
-| Env var                            | Default     | Meaning                                                                                                             |
-| ---------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SAFE_FETCH_ALLOW_LOCAL`           | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
-| `SAFE_FETCH_ALLOWLIST`             | _(empty)_   | Comma-separated host allowlist                                                                                      |
-| `SAFE_FETCH_MAX_BYTES`             | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
-| `SAFE_FETCH_TIMEOUT_MS`            | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
-| `SAFE_FETCH_MAX_REDIRECTS`         | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
-| `TRANSPORT` / `--http` flag        | stdio       | Switch to Streamable HTTP                                                                                           |
-| `HOST`                             | `127.0.0.1` | HTTP bind address. A non-loopback address prints a warning: HTTP mode has no auth                                   |
-| `PORT`                             | `3000`      | HTTP port                                                                                                           |
-| `SAFE_FETCH_ALLOWED_ORIGINS`       | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
-| `SAFE_FETCH_RATE_LIMIT_MAX`        | `60`        | Requests per window, per IP (HTTP mode)                                                                             |
-| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS`  | `60000`     | Rate-limit window                                                                                                   |
-| `SAFE_FETCH_HTTPS_ONLY`            | `false`     | Refuse plain `http://` URLs and redirect hops                                                                       |
-| `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE` | `false`     | Follow `https://` → `http://` redirects (refused by default)                                                        |
-| `SAFE_FETCH_ALLOWED_PORTS`         | _(any)_     | Comma-separated destination ports, e.g. `443,8443`. Default ports count (`:80`, `:443`)                             |
-| `SAFE_FETCH_CACHE_TTL_MS`          | `0` (off)   | Reuse responses this long. Every cache hit re-runs the full guard; stale entries revalidate with ETag/Last-Modified |
-| `SAFE_FETCH_CACHE_MAX_ENTRIES`     | `100`       | Cache entry limit (LRU)                                                                                             |
-| `SAFE_FETCH_CACHE_MAX_BYTES`       | `20000000`  | Total cached body bytes                                                                                             |
-| `SAFE_FETCH_LOG_FORMAT`            | `text`      | `json` writes one JSON object per audit line to stderr                                                              |
+| Env var                               | Default     | Meaning                                                                                                             |
+| ------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `SAFE_FETCH_ALLOW_LOCAL`              | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
+| `SAFE_FETCH_ALLOWLIST`                | _(empty)_   | Comma-separated host allowlist                                                                                      |
+| `SAFE_FETCH_MAX_BYTES`                | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
+| `SAFE_FETCH_TIMEOUT_MS`               | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
+| `SAFE_FETCH_MAX_REDIRECTS`            | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
+| `TRANSPORT` / `--http` flag           | stdio       | Switch to Streamable HTTP                                                                                           |
+| `HOST`                                | `127.0.0.1` | HTTP bind address. A non-loopback address prints a warning: HTTP mode has no auth                                   |
+| `PORT`                                | `3000`      | HTTP port                                                                                                           |
+| `SAFE_FETCH_ALLOWED_ORIGINS`          | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
+| `SAFE_FETCH_RATE_LIMIT_MAX`           | `60`        | Requests per window, per IP (HTTP mode)                                                                             |
+| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS`     | `60000`     | Rate-limit window                                                                                                   |
+| `SAFE_FETCH_HTTPS_ONLY`               | `false`     | Refuse plain `http://` URLs and redirect hops                                                                       |
+| `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE`    | `false`     | Follow `https://` → `http://` redirects (refused by default)                                                        |
+| `SAFE_FETCH_ALLOWED_PORTS`            | _(any)_     | Comma-separated destination ports, e.g. `443,8443`. Default ports count (`:80`, `:443`)                             |
+| `SAFE_FETCH_CACHE_TTL_MS`             | `0` (off)   | Reuse responses this long. Every cache hit re-runs the full guard; stale entries revalidate with ETag/Last-Modified |
+| `SAFE_FETCH_CACHE_MAX_ENTRIES`        | `100`       | Cache entry limit (LRU)                                                                                             |
+| `SAFE_FETCH_CACHE_MAX_BYTES`          | `20000000`  | Total cached body bytes                                                                                             |
+| `SAFE_FETCH_LOG_FORMAT`               | `text`      | `json` writes one JSON object per audit line to stderr                                                              |
+| `SAFE_FETCH_COMPAT_TOOL` / `--compat` | `false`     | Also expose the reference server's `fetch` tool and prompt (drop-in migration)                                      |
 
 Invalid values stop the server at startup with a message naming the variable.
 Nothing silently falls back to a default.

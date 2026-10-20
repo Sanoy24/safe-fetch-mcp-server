@@ -23,6 +23,8 @@ export interface SafeFetchConfig {
   cache?: CacheConfig;
   /** Audit-log line format on stderr. Default "text". */
   logFormat?: "text" | "json";
+  /** Also expose the reference server's `fetch` tool and prompt. Default false. */
+  compatFetchTool?: boolean;
 }
 
 /** Thrown for an invalid environment variable. The message names the variable. */
@@ -125,7 +127,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
         20_000_000
       )
     },
-    logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"])
+    logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"]),
+    compatFetchTool: parseBoolean(
+      "SAFE_FETCH_COMPAT_TOOL",
+      env["SAFE_FETCH_COMPAT_TOOL"],
+      false
+    )
   };
 }
 

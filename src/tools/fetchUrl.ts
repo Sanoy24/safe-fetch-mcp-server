@@ -122,7 +122,7 @@ function redactUrl(rawUrl: string): string {
 }
 
 /** The one place error results are built. */
-function errorResult(code: FetchErrorCode, message: string): FetchUrlToolResult {
+export function errorResult(code: FetchErrorCode, message: string): FetchUrlToolResult {
   return {
     isError: true,
     content: [{ type: "text", text: message }],

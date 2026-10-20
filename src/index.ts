@@ -57,6 +57,10 @@ function shutDownOnSignal(httpServer: Server): void {
 }
 
 async function main(): Promise<void> {
+  // --compat mirrors SAFE_FETCH_COMPAT_TOOL=true, so switching from the reference fetch
+  // server is a one-line change to the args. Set before the config is first read.
+  if (process.argv.includes("--compat")) process.env["SAFE_FETCH_COMPAT_TOOL"] = "true";
+
   // Validate every setting before accepting any request.
   getConfig();
 
