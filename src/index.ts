@@ -56,6 +56,14 @@ function shutDownOnSignal(httpServer: Server): void {
   process.once("SIGTERM", shutDown);
 }
 
+// In stdio mode the client owns our stdout. If it disconnects while a response is being
+// written, the write fails with EPIPE. That just means the client is gone, so exit
+// quietly instead of crashing with a stack trace.
+process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") process.exit(0);
+  throw err;
+});
+
 async function main(): Promise<void> {
   // --compat mirrors SAFE_FETCH_COMPAT_TOOL=true, so switching from the reference fetch
   // server is a one-line change to the args. Set before the config is first read.
