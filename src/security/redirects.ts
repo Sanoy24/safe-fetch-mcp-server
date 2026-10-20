@@ -1,6 +1,8 @@
 import * as http from "node:http";
 import * as https from "node:https";
 import { isIP } from "node:net";
+import * as zlib from "node:zlib";
+import { Transform, type Readable, type TransformCallback } from "node:stream";
 import type { SafeFetchConfig } from "../config.js";
 import { effectivePort, parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
@@ -60,6 +62,48 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 // or whatever they serve. */* keeps every server answering.
 const ACCEPT =
   "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.9, text/plain;q=0.8, application/json;q=0.8, */*;q=0.5";
+
+// Compression saves bandwidth; the byte cap is enforced on the DECOMPRESSED stream, so
+// a decompression bomb stops at SAFE_FETCH_MAX_BYTES (threat-model row 23). zstd is
+// left out because not every supported Node version can decode it.
+const ACCEPT_ENCODING = "gzip, br, deflate";
+
+/**
+ * "deflate" is zlib-wrapped per the spec, but some servers send raw deflate. Look at the
+ * first two bytes (RFC 1950 header check) and pick the matching inflater.
+ */
+function createDeflateDecoder(): Transform {
+  let inner: zlib.Inflate | zlib.InflateRaw | undefined;
+  const decoder = new Transform({
+    transform(chunk: Buffer, _enc: BufferEncoding, done: TransformCallback): void {
+      if (!inner) {
+        const b0 = chunk[0] ?? 0;
+        const b1 = chunk[1] ?? 0;
+        const zlibWrapped = (b0 & 0x0f) === 8 && ((b0 << 8) | b1) % 31 === 0;
+        inner = zlibWrapped ? zlib.createInflate() : zlib.createInflateRaw();
+        inner.on("data", (out: Buffer) => decoder.push(out));
+        inner.on("error", (err) => decoder.destroy(err));
+      }
+      inner.write(chunk, () => done());
+    },
+    flush(done: TransformCallback): void {
+      if (!inner) return done();
+      inner.once("end", () => done());
+      inner.end();
+    }
+  });
+  return decoder;
+}
+
+/** A decoder for the response's Content-Encoding, null for none, or undefined if unsupported. */
+function decoderFor(contentEncoding: string | undefined): Transform | null | undefined {
+  const encoding = (contentEncoding ?? "").trim().toLowerCase();
+  if (encoding === "" || encoding === "identity") return null;
+  if (encoding === "gzip" || encoding === "x-gzip") return zlib.createGunzip();
+  if (encoding === "br") return zlib.createBrotliDecompress();
+  if (encoding === "deflate") return createDeflateDecoder();
+  return undefined;
+}
 
 function timeoutError(cfg: SafeFetchConfig): SafeFetchError {
   return new SafeFetchError(
@@ -137,6 +181,7 @@ function performPinnedRequest(
           Host: url.host,
           "User-Agent": "safe-fetch-mcp-server",
           Accept: ACCEPT,
+          "Accept-Encoding": ACCEPT_ENCODING,
           ...extraHeaders
         }
       },
@@ -144,7 +189,38 @@ function performPinnedRequest(
         const chunks: Buffer[] = [];
         let received = 0;
 
-        res.on("data", (chunk: Buffer) => {
+        const decoder = decoderFor(firstHeader(res.headers["content-encoding"]));
+        if (decoder === undefined) {
+          settleReject(
+            new SafeFetchError(
+              "INVALID_RESPONSE",
+              "Refused: the response used a content encoding this server doesn't support.",
+              {
+                cause: `content-encoding=${firstHeader(res.headers["content-encoding"])}`
+              }
+            )
+          );
+          req.destroy();
+          return;
+        }
+        const body: Readable = decoder ? res.pipe(decoder) : res;
+        if (decoder) {
+          decoder.on("error", (err) => {
+            settleReject(
+              signal.aborted
+                ? timeoutError(cfg)
+                : new SafeFetchError(
+                    "INVALID_RESPONSE",
+                    "Refused: the response body could not be decompressed.",
+                    { cause: err.message }
+                  )
+            );
+            req.destroy();
+          });
+        }
+
+        // Counts DECOMPRESSED bytes, so the cap holds against decompression bombs.
+        body.on("data", (chunk: Buffer) => {
           received += chunk.length;
           if (received > cfg.maxBytes) {
             const overshoot = received - cfg.maxBytes;
@@ -156,13 +232,14 @@ function performPinnedRequest(
               body: Buffer.concat(chunks),
               truncated: true
             });
+            if (decoder) decoder.destroy();
             req.destroy();
             return;
           }
           chunks.push(chunk);
         });
 
-        res.on("end", () => {
+        body.on("end", () => {
           settleResolve({
             status: res.statusCode ?? 0,
             headers: res.headers,

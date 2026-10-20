@@ -65,6 +65,7 @@ Failures have `isError: true` and `structuredContent.error = { code, retryable, 
 | `CONNECTION_FAILED`        | Retry once, then report it                                                                                                               |
 | `DNS_RESOLUTION_FAILED`    | Check the hostname for typos. Retry once only if it was likely transient                                                                 |
 | `REDIRECT_FAILED`          | Report the URL as broken (redirect loop or bad redirect). Try the canonical URL if you know it                                           |
+| `INVALID_RESPONSE`         | The site sent a corrupt or unsupported (compressed) response. Report it; don't retry in a loop                                           |
 | `UNSUPPORTED_CONTENT_TYPE` | The URL isn't text (image, PDF, binary). Tell the user; look for an HTML or text version                                                 |
 | `INVALID_INPUT`            | Fix the arguments: absolute `http(s)` URL, valid numbers, no extra fields                                                                |
 | `INTERNAL_ERROR`           | Report it. Don't retry in a loop                                                                                                         |

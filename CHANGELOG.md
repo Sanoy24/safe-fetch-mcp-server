@@ -6,6 +6,15 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Compressed responses: requests accept gzip, br and deflate, including raw deflate,
+  which is detected automatically. The body is decompressed while streaming, and
+  `SAFE_FETCH_MAX_BYTES` applies to the **decompressed** size, so a decompression bomb stops
+  at the cap. `bytes` reports decompressed bytes.
+- New error code `INVALID_RESPONSE` (not retryable), for corrupt compressed bodies or an
+  encoding the server never asked for.
+
 ## [0.4.1] - 2026-10-20
 
 ### Fixed

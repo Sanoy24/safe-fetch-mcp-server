@@ -235,16 +235,17 @@ conversion as before.
 
 Failures set `isError: true` and `structuredContent.error = { code, retryable, message }`:
 
-| Code                       | Retryable | Meaning                                                           |
-| -------------------------- | --------- | ----------------------------------------------------------------- |
-| `INVALID_INPUT`            | no        | Arguments failed validation                                       |
-| `POLICY_REJECTED`          | **never** | Blocked scheme, credentials, host or address. A security decision |
-| `DNS_RESOLUTION_FAILED`    | yes       | Host didn't resolve                                               |
-| `CONNECTION_FAILED`        | yes       | Couldn't connect, or the connection dropped                       |
-| `TIMEOUT`                  | yes       | `SAFE_FETCH_TIMEOUT_MS` deadline passed                           |
-| `REDIRECT_FAILED`          | no        | Too many redirects, or a missing or invalid `Location`            |
-| `UNSUPPORTED_CONTENT_TYPE` | no        | Response isn't text (images, PDFs, binaries, ...)                 |
-| `INTERNAL_ERROR`           | no        | Unexpected failure. Details are in the server's stderr log        |
+| Code                       | Retryable | Meaning                                                               |
+| -------------------------- | --------- | --------------------------------------------------------------------- |
+| `INVALID_INPUT`            | no        | Arguments failed validation                                           |
+| `POLICY_REJECTED`          | **never** | Blocked scheme, credentials, host or address. A security decision     |
+| `DNS_RESOLUTION_FAILED`    | yes       | Host didn't resolve                                                   |
+| `CONNECTION_FAILED`        | yes       | Couldn't connect, or the connection dropped                           |
+| `TIMEOUT`                  | yes       | `SAFE_FETCH_TIMEOUT_MS` deadline passed                               |
+| `REDIRECT_FAILED`          | no        | Too many redirects, or a missing or invalid `Location`                |
+| `INVALID_RESPONSE`         | no        | The response couldn't be decoded (corrupt or unsupported compression) |
+| `UNSUPPORTED_CONTENT_TYPE` | no        | Response isn't text (images, PDFs, binaries, ...)                     |
+| `INTERNAL_ERROR`           | no        | Unexpected failure. Details are in the server's stderr log            |
 
 ### Companion agent skill
 
