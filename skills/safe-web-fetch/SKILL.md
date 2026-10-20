@@ -16,6 +16,10 @@ If `fetch_url` isn't available, the server isn't configured. Point the user to
 
 ## Fetching
 
+If the server runs with `--compat`, there's also a `fetch` tool with the reference
+server's arguments (`url`, `max_length`, `start_index`, `raw`). It follows the same rules
+as everything below, and `fetch_url` is still the richer choice.
+
 ```
 fetch_url({ url: "https://example.com/docs" })
 ```

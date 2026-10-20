@@ -81,6 +81,30 @@ try {
     await client.close();
   }
 
+  // --compat: the drop-in replacement path for the reference fetch server.
+  const compat = new Client({ name: "smoke-compat", version: "0" });
+  await compat.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [binPath, "--compat"],
+      stderr: "ignore"
+    })
+  );
+  try {
+    const names = (await compat.listTools()).tools.map((t) => t.name).sort();
+    check(names.join(",") === "fetch,fetch_url", "--compat adds the fetch tool");
+    const refused = await compat.callTool({
+      name: "fetch",
+      arguments: { url: "http://169.254.169.254/" }
+    });
+    check(
+      refused.structuredContent?.error?.code === "POLICY_REJECTED",
+      "--compat fetch is guarded"
+    );
+  } finally {
+    await compat.close();
+  }
+
   const bad = spawnSync(process.execPath, [binPath], {
     env: { ...process.env, SAFE_FETCH_TIMEOUT_MS: "abc" },
     encoding: "utf8",

@@ -48,7 +48,8 @@ describe("loadConfig", () => {
       allowHttpsDowngrade: false,
       allowedPorts: [],
       cache: { ttlMs: 0, maxEntries: 100, maxBytes: 20_000_000 },
-      logFormat: "text"
+      logFormat: "text",
+      compatFetchTool: false
     });
   });
 

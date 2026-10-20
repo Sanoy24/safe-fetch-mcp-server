@@ -8,6 +8,10 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Drop-in compatibility with the reference `mcp-server-fetch`: `--compat` (or
+  `SAFE_FETCH_COMPAT_TOOL=true`) adds a `fetch` tool with the same arguments
+  (`url`, `max_length`, `start_index`, `raw`) and the same `fetch` prompt. It's a thin
+  adapter over `fetch_url`, with the same guard, limits and error codes. Off by default.
 - Public SSRF test vectors (`docs/test-vectors.md`, `test/vectors.spec.ts`): 51
   bypass classes from real fetch-server CVEs, each required to fail with
   `POLICY_REJECTED`. Metadata-class vectors are also re-run with
