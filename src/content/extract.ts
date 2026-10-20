@@ -16,6 +16,13 @@ import { baseType, decodeBody, htmlToMarkdown } from "./toMarkdown.js";
 export type ExtractMode = "main" | "full";
 export type Extraction = "main" | "full" | "fallback-full" | "none";
 
+/** Signals for the agent about how to treat the result. */
+export const HINTS = [
+  "suspicious-hidden-content-removed",
+  "likely-requires-javascript"
+] as const;
+export type Hint = (typeof HINTS)[number];
+
 export interface PageMetadata {
   title?: string;
   description?: string;
@@ -30,6 +37,7 @@ export interface ExtractedContent {
   readonly markdown: string;
   readonly extraction: Extraction;
   readonly metadata: PageMetadata;
+  readonly hints: Hint[];
 }
 
 /**
@@ -120,27 +128,114 @@ function countCodeBlocks(html: string): number {
   return (html.match(/<pre[\s>]/gi) ?? []).length;
 }
 
+// Invisible characters used to hide or reorder text from human readers: zero-width
+// spaces/joiners, bidi overrides and isolates, word joiners, and the BOM.
+const INVISIBLE_CHARS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+
+function stripInvisible(text: string): string {
+  return text.replace(INVISIBLE_CHARS, "");
+}
+
+const HIDDEN_SELECTOR = '[hidden], [aria-hidden="true"], template, input[type="hidden"]';
+const HIDING_STYLE =
+  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important)?\s*(?:;|$)/i;
+
+// Phrases typical of prompt injection. Ordinary pages hide plenty of text (menus,
+// screen-reader labels), so the hint only fires when hidden text looks like it's
+// addressed to an AI. It's a heuristic signal, not a filter: hidden content is
+// removed either way.
+const INJECTION_LIKE =
+  /\b(?:ignore|disregard|forget|override)\b[^.]{0,40}\b(?:previous|prior|above|earlier|all|system)\b[^.]{0,20}\b(?:instructions?|prompts?|rules|messages?)\b|\byou are now\b|\bsystem prompt\b|\b(?:new|updated|hidden) instructions?\b|\b(?:as an|you are an?) (?:ai|assistant|language model)\b|<\/?(?:system|assistant|instructions?)>|\b(?:reveal|send|email|exfiltrate|leak)\b[^.]{0,40}\b(?:api[ _-]?keys?|passwords?|secrets?|tokens?|credentials?)\b/i;
+
+/**
+ * Removes elements a human reader can't see (threat-model row 25). Returns true if any
+ * removed text looked like instructions aimed at an AI.
+ */
+function removeHiddenElements(document: Doc): boolean {
+  const hidden = [
+    ...document.querySelectorAll(HIDDEN_SELECTOR),
+    ...[...document.querySelectorAll("[style]")].filter((el) =>
+      HIDING_STYLE.test(el.getAttribute("style") ?? "")
+    )
+  ];
+  let suspicious = false;
+  for (const el of hidden) {
+    if (!el.isConnected) continue; // already removed with a hidden ancestor
+    if (INJECTION_LIKE.test(el.textContent ?? "")) suspicious = true;
+    el.remove();
+  }
+  return suspicious;
+}
+
+const APP_MOUNT_SELECTOR =
+  "#root, #app, #__next, #__nuxt, #svelte, [ng-app], [data-reactroot]";
+const SPA_MAX_TEXT_CHARS = 250;
+
+/**
+ * True for an empty single-page-app shell: almost no visible text, plus an empty app
+ * mount point or a <noscript> asking for JavaScript. Must run before scripts are removed.
+ */
+function looksLikeJavaScriptShell(document: Doc): boolean {
+  const noscriptAsksForJs = [...document.querySelectorAll("noscript")].some((el) =>
+    /javascript/i.test(el.textContent ?? "")
+  );
+  const emptyMount = [...document.querySelectorAll(APP_MOUNT_SELECTOR)].some(
+    (el) => (el.textContent ?? "").trim() === ""
+  );
+  if (!noscriptAsksForJs && !emptyMount) return false;
+
+  const clone = document.body?.cloneNode(true) as typeof document.body | undefined;
+  if (!clone) return true;
+  for (const el of [...clone.querySelectorAll("script, style, noscript, template")])
+    el.remove();
+  return (
+    (clone.textContent ?? "").replace(/\s+/g, " ").trim().length < SPA_MAX_TEXT_CHARS
+  );
+}
+
 export function extractContent(
   body: Buffer,
   contentType: string,
   mode: ExtractMode,
   baseUrl?: string
 ): ExtractedContent {
-  const text = decodeBody(body, contentType);
+  const decoded = decodeBody(body, contentType);
   const type = baseType(contentType);
 
   if (type !== "text/html" && type !== "application/xhtml+xml") {
-    const metadata = type === "text/markdown" ? frontMatterMetadata(text) : {};
-    return { markdown: text, extraction: "none", metadata: prune(metadata) };
+    const metadata = type === "text/markdown" ? frontMatterMetadata(decoded) : {};
+    return {
+      markdown: stripInvisible(decoded),
+      extraction: "none",
+      metadata: prune(metadata),
+      hints: []
+    };
   }
 
-  const { document } = parseHTML(text);
+  const { document } = parseHTML(decoded);
   const metadata = htmlMetadata(document, baseUrl);
-  const full = (extraction: Extraction): ExtractedContent => ({
-    markdown: htmlToMarkdown(text),
-    extraction,
-    metadata: prune(metadata)
-  });
+  const hints = new Set<Hint>();
+  if (looksLikeJavaScriptShell(document)) hints.add("likely-requires-javascript");
+  for (const el of [...document.querySelectorAll("script, style, noscript")]) el.remove();
+  if (removeHiddenElements(document)) hints.add("suspicious-hidden-content-removed");
+
+  // Everything below works from the cleaned DOM, so hidden content can't reach the
+  // agent through either the main-content or the full-page path.
+  const cleanedHtml = document.toString();
+  const finish = (
+    markdown: string,
+    extraction: Extraction,
+    meta: PageMetadata
+  ): ExtractedContent => {
+    return {
+      markdown: stripInvisible(markdown),
+      extraction,
+      metadata: prune(meta),
+      hints: [...hints]
+    };
+  };
+  const full = (extraction: Extraction): ExtractedContent =>
+    finish(htmlToMarkdown(cleanedHtml), extraction, metadata);
 
   if (mode === "full") return full("full");
   if (document.querySelectorAll("*").length > MAX_ELEMENTS_TO_PARSE) {
@@ -154,9 +249,7 @@ export function extractContent(
   try {
     article = new Readability(
       document as unknown as ConstructorParameters<typeof Readability>[0],
-      {
-        maxElemsToParse: MAX_ELEMENTS_TO_PARSE
-      }
+      { maxElemsToParse: MAX_ELEMENTS_TO_PARSE }
     ).parse();
   } catch {
     article = null;
@@ -181,16 +274,12 @@ export function extractContent(
   if (title && !markdown.trimStart().startsWith("#"))
     markdown = `# ${title}\n\n${markdown}`;
 
-  return {
-    markdown,
-    extraction: "main",
-    metadata: prune({
-      ...metadata,
-      byline: clean(article.byline),
-      lang: metadata.lang ?? clean(article.lang),
-      siteName: metadata.siteName ?? clean(article.siteName),
-      publishedAt: metadata.publishedAt ?? clean(article.publishedTime),
-      description: metadata.description ?? clean(article.excerpt)
-    })
-  };
+  return finish(markdown, "main", {
+    ...metadata,
+    byline: clean(article.byline),
+    lang: metadata.lang ?? clean(article.lang),
+    siteName: metadata.siteName ?? clean(article.siteName),
+    publishedAt: metadata.publishedAt ?? clean(article.publishedTime),
+    description: metadata.description ?? clean(article.excerpt)
+  });
 }

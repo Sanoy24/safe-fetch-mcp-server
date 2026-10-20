@@ -17,7 +17,7 @@ connect to _that same_ IP → re-validate on every redirect.
 
 ## Threat → defense matrix
 
-The canonical matrix (rows 1–24), address classes, trust boundaries and "not guaranteed"
+The canonical matrix (rows 1–25), address classes, trust boundaries and "not guaranteed"
 list live in [`docs/threat-model.md`](../../../docs/threat-model.md). Code comments and
 tests cite its row numbers. Read it before changing `src/security/`, and add a row (with a
 test) for any new defense.

@@ -221,6 +221,13 @@ This domain is for use in documentation examples without needing permission.
 | `start_index` | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex`                                                                              |
 | `max_bytes`   | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it                                                                                    |
 
+**Hidden text is removed.** Elements a human can't see (`hidden`, `aria-hidden`, inline
+`display:none` / `visibility:hidden`, `<template>`) and zero-width or bidi-control characters
+are stripped before conversion, because hidden text is a known prompt-injection channel.
+If the hidden text looked like instructions to an AI, `hints` includes
+`suspicious-hidden-content-removed`. An empty JavaScript app shell gets
+`likely-requires-javascript`, so the agent can switch to a browser tool instead of retrying.
+
 **Main content by default.** Pages are reduced to their main content with Mozilla
 Readability. On 14 real pages (docs, Wikipedia, GitHub, blogs, news, forums) that's 44%
 less text overall, and 75% less on Wikipedia, where the article now starts at the top

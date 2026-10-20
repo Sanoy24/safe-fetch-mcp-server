@@ -14,6 +14,15 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Hidden-content stripping: elements a human can't see (`hidden`, `aria-hidden`, inline
+  `display:none` / `visibility:hidden`, `<template>`) and zero-width or bidi-control characters
+  are removed before conversion, in every mode except `raw`. They're a known prompt-injection
+  channel.
+- `hints` in `structuredContent`: `suspicious-hidden-content-removed` (hidden text looked
+  like instructions to an AI; it fired on 0 of 14 ordinary benchmark pages) and
+  `likely-requires-javascript` (empty app shell).
+- A CI guard that fails if any tracked source file contains literal invisible or
+  bidi-control characters (Trojan Source, CVE-2021-42574).
 - Main-content extraction (`extract: "main" | "full"`) using Mozilla Readability on a
   linkedom DOM. Neither library has network access. Chosen by a benchmark on 14 real
   pages: 44% less text overall, 75% less on Wikipedia. It falls back to the full page
