@@ -8,6 +8,9 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `*.domain` wildcards in `SAFE_FETCH_ALLOWLIST` (subdomains at any depth, not the
+  apex), and a new `SAFE_FETCH_DENYLIST` that wins over the allowlist. Matching
+  ignores case and trailing dots, and Unicode entries are normalized to punycode.
 - Drop-in compatibility with the reference `mcp-server-fetch`: `--compat` (or
   `SAFE_FETCH_COMPAT_TOOL=true`) adds a `fetch` tool with the same arguments
   (`url`, `max_length`, `start_index`, `raw`) and the same `fetch` prompt. It's a thin
@@ -16,6 +19,12 @@ this project follows [Semantic Versioning](https://semver.org/).
   bypass classes from real fetch-server CVEs, each required to fail with
   `POLICY_REJECTED`. Metadata-class vectors are also re-run with
   `SAFE_FETCH_ALLOW_LOCAL=true`.
+
+### Changed
+
+- `SAFE_FETCH_ALLOWLIST` entries are now validated at startup. An entry that isn't a
+  host or `*.host` (e.g. `https://example.com` or `example.com:8080`) stops the server
+  with a message naming the variable. Before, it was silently kept and never matched.
 
 ## [0.3.0] - 2026-10-19
 

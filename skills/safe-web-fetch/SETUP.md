@@ -49,7 +49,8 @@ The defaults are safe. Override them with an `env` block next to `command`:
 
 | Variable                   | Default   | Effect                                                                                                            |
 | -------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| `SAFE_FETCH_ALLOWLIST`     | _(empty)_ | Comma-separated host allowlist. When set, only these hosts are allowed                                            |
+| `SAFE_FETCH_ALLOWLIST`     | _(empty)_ | Comma-separated hosts or `*.domain` wildcards. When set, only these hosts are allowed                             |
+| `SAFE_FETCH_DENYLIST`      | _(empty)_ | Hosts or `*.domain` wildcards that are always refused                                                             |
 | `SAFE_FETCH_MAX_BYTES`     | `5000000` | Download cap per fetch                                                                                            |
 | `SAFE_FETCH_TIMEOUT_MS`    | `10000`   | Total time limit per fetch, including redirects                                                                   |
 | `SAFE_FETCH_MAX_REDIRECTS` | `5`       | Redirect limit (0–20)                                                                                             |
