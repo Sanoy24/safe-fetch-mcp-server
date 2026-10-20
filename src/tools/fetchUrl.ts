@@ -73,6 +73,13 @@ export const FetchUrlOutput = z.object({
     .nullable()
     .optional()
     .describe("Pass as start_index to read the next chunk; null when nothing is left."),
+  markdownTokens: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "Token count the site reported for its server-rendered markdown (x-markdown-tokens), when it sent markdown."
+    ),
   fromCache: z
     .boolean()
     .optional()
@@ -202,7 +209,10 @@ export async function runFetchUrl(
         totalChars: text.length,
         startIndex: start,
         nextStartIndex,
-        fromCache: result.fromCache === true
+        fromCache: result.fromCache === true,
+        ...(result.markdownTokens !== undefined
+          ? { markdownTokens: result.markdownTokens }
+          : {})
       }
     };
   } catch (err) {

@@ -225,6 +225,13 @@ Successful results carry `structuredContent` with `status`, `finalUrl`,
 `startIndex` and `nextStartIndex` (`null` once there's nothing left). Only text
 content types are returned: HTML, `text/*`, JSON, XML, and `+json`/`+xml` types.
 
+**Markdown negotiation:** every request asks for `text/markdown` first. Sites that support
+it (Cloudflare "Markdown for Agents", Vercel, HackMD, ...) return server-rendered markdown,
+which is passed through untouched. For example, Cloudflare's docs page on the feature is
+176 KB as HTML and 16 KB as markdown. When a site reports a token count
+(`x-markdown-tokens`), it appears as `markdownTokens`. Other sites get HTML-to-markdown
+conversion as before.
+
 Failures set `isError: true` and `structuredContent.error = { code, retryable }`:
 
 | Code                       | Retryable | Meaning                                                           |
