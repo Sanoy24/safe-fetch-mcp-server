@@ -313,3 +313,41 @@ describe("Phase 5 options through the tool", () => {
     expect(lines[1]).toMatchObject({ outcome: "refused", code: "POLICY_REJECTED" });
   });
 });
+
+// Regression: some clients (Claude Code, observed 2026-10-20) show the model ONLY
+// structuredContent when it is present, dropping the text content block. Without the page
+// text in structuredContent, fetch_url returned metadata but no page for those agents.
+describe("structured-only clients get everything an agent needs", () => {
+  it("success: structuredContent carries the same framed text as the content block", async () => {
+    const base = await serve((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("hello structured world ".repeat(10));
+    });
+
+    const result = await runFetchUrl({ url: `${base}/`, max_chars: 50 }, testConfig());
+    const structured = result.structuredContent;
+
+    expect(structured?.text).toBe(result.content[0]?.text);
+    expect(structured?.text).toContain("untrusted data");
+    expect(structured?.text).toContain("hello structured world");
+    expect(structured?.nextStartIndex).toBe(50);
+    expect(FetchUrlOutput.strict().safeParse(structured).success).toBe(true);
+  });
+
+  it("errors: structuredContent carries the refusal message, not just the code", async () => {
+    const result = await runFetchUrl(
+      { url: "http://169.254.169.254/" },
+      testConfig({ allowLocal: false })
+    );
+
+    expect(result.structuredContent?.error).toEqual({
+      code: "POLICY_REJECTED",
+      retryable: false,
+      message: result.content[0]?.text
+    });
+    expect(result.structuredContent?.error?.message).toMatch(/^Refused:/);
+    expect(FetchUrlOutput.strict().safeParse(result.structuredContent).success).toBe(
+      true
+    );
+  });
+});

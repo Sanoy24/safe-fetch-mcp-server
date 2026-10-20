@@ -56,7 +56,7 @@ Every result starts with a notice that the content is untrusted. Take it serious
 
 ## When a fetch fails
 
-Failures have `isError: true` and `structuredContent.error = { code, retryable }`.
+Failures have `isError: true` and `structuredContent.error = { code, retryable, message }`.
 
 | Code                       | What to do                                                                                                                               |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |

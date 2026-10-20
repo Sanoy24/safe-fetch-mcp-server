@@ -128,7 +128,11 @@ describe("compat mode on (SAFE_FETCH_COMPAT_TOOL / --compat)", () => {
 
     expect(refused.isError).toBe(true);
     expect(refused.structuredContent).toEqual({
-      error: { code: "POLICY_REJECTED", retryable: false }
+      error: {
+        code: "POLICY_REJECTED",
+        retryable: false,
+        message: expect.stringMatching(/^Refused: .*cloud-metadata/)
+      }
     });
     await client.close();
   });

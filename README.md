@@ -220,7 +220,8 @@ This domain is for use in documentation examples without needing permission.
 | `start_index` | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex` |
 | `max_bytes`   | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it       |
 
-Successful results carry `structuredContent` with `status`, `finalUrl`,
+Successful results carry `structuredContent` with the page `text` (the same framed text as
+the content block, for clients that only show structured output), `status`, `finalUrl`,
 `contentType`, `bytes`, `truncated` (hit the byte limit), `totalChars`,
 `startIndex` and `nextStartIndex` (`null` once there's nothing left). Only text
 content types are returned: HTML, `text/*`, JSON, XML, and `+json`/`+xml` types.
@@ -232,7 +233,7 @@ which is passed through untouched. For example, Cloudflare's docs page on the fe
 (`x-markdown-tokens`), it appears as `markdownTokens`. Other sites get HTML-to-markdown
 conversion as before.
 
-Failures set `isError: true` and `structuredContent.error = { code, retryable }`:
+Failures set `isError: true` and `structuredContent.error = { code, retryable, message }`:
 
 | Code                       | Retryable | Meaning                                                           |
 | -------------------------- | --------- | ----------------------------------------------------------------- |

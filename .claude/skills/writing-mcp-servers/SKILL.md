@@ -76,7 +76,7 @@ server.registerTool(
   {
     title: "Fetch URL",
     description:
-      "Fetch a public http(s) URL and return markdown. Read-only; refuses private/loopback/metadata targets. Args: url, format, max_chars, start_index, max_bytes. Returns text plus structuredContent {status, finalUrl, ..., nextStartIndex}; on failure structuredContent.error {code, retryable}.",
+      "Fetch a public http(s) URL and return markdown. Read-only; refuses private/loopback/metadata targets. Args: url, format, max_chars, start_index, max_bytes. Returns text plus structuredContent {status, finalUrl, ..., nextStartIndex}; on failure structuredContent.error {code, retryable, message}.",
     inputSchema: FetchUrlInput,
     annotations: {
       readOnlyHint: true,
@@ -107,7 +107,7 @@ return {
 
 - Report tool errors inside the result with `isError: true`, not as protocol errors.
 - Build every error result with the shared `errorResult(code, message)` in
-  `src/tools/fetchUrl.ts`. It sets `structuredContent.error = { code, retryable }`.
+  `src/tools/fetchUrl.ts`. It sets `structuredContent.error = { code, retryable, message }`.
   Codes are defined once in `src/security/errors.ts`; adding one is fine, renaming or
   removing one breaks the contract.
 - Guard failures throw a `GuardError` subclass carrying its code. Don't map error
@@ -126,6 +126,14 @@ throw new ResolutionError(
 ```
 
 ## Output schema
+
+**`structuredContent` must be self-sufficient.** Some clients (Claude Code, observed
+2026-10-20) show the model _only_ `structuredContent` when it is present, and drop the text
+content block, with or without an `outputSchema`. Anything the agent needs goes in
+`structuredContent` too: the framed page `text` on success, and the `message` on errors.
+This bug shipped in 0.2.0–0.4.0. Agents received metadata but no page, and only an
+end-to-end check through a real client caught it. `test/toolContract.spec.ts` ("structured-only
+clients") guards it now.
 
 `fetch_url` declares `outputSchema: FetchUrlOutput`. Every field is optional so that both
 success and error `structuredContent` conform. When you add a field, add it to the

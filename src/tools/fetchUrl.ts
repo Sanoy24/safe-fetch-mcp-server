@@ -57,6 +57,14 @@ export type FetchUrlInput = z.infer<typeof FetchUrlInput>;
  * optional so error results conform to the same declared schema.
  */
 export const FetchUrlOutput = z.object({
+  // Some clients show the model ONLY structuredContent, so it must be self-sufficient:
+  // the page text lives here too, not just in the text content block.
+  text: z
+    .string()
+    .optional()
+    .describe(
+      "The returned chunk of page text, framed as untrusted data (identical to the text content block)."
+    ),
   status: z.number().int().optional().describe("HTTP status of the final response."),
   finalUrl: z.string().optional().describe("URL after following redirects."),
   contentType: z.string().optional().describe("Content-Type of the final response."),
@@ -91,7 +99,10 @@ export const FetchUrlOutput = z.object({
       code: z.enum(FETCH_ERROR_CODES).describe("Stable failure category."),
       retryable: z
         .boolean()
-        .describe("Whether retrying later might succeed. Policy rejections never are.")
+        .describe("Whether retrying later might succeed. Policy rejections never are."),
+      message: z
+        .string()
+        .describe("Actionable explanation (identical to the text content block).")
     })
     .optional()
 });
@@ -133,7 +144,7 @@ export function errorResult(code: FetchErrorCode, message: string): FetchUrlTool
   return {
     isError: true,
     content: [{ type: "text", text: message }],
-    structuredContent: { error: { code, retryable: isRetryable(code) } }
+    structuredContent: { error: { code, retryable: isRetryable(code), message } }
   };
 }
 
@@ -198,9 +209,11 @@ export async function runFetchUrl(
       fromCache: result.fromCache === true
     });
 
+    const framed = frameAsUntrustedData(chunk, result.finalUrl);
     return {
-      content: [{ type: "text", text: frameAsUntrustedData(chunk, result.finalUrl) }],
+      content: [{ type: "text", text: framed }],
       structuredContent: {
+        text: framed,
         status: result.status,
         finalUrl: result.finalUrl,
         contentType: result.contentType,
