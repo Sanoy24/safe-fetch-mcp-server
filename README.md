@@ -273,6 +273,10 @@ poller) was a real 2026 CVE.
 Full matrix with the test for each row, address classes and trust boundaries:
 [`docs/threat-model.md`](docs/threat-model.md).
 
+Every known bypass class is in [`docs/test-vectors.md`](docs/test-vectors.md): 51 public
+vectors (encodings, IPv6 forms, wildcard DNS, parser tricks, redirects) taken from real
+fetch-server CVEs, all enforced in CI.
+
 ## Configuration
 
 | Env var                            | Default     | Meaning                                                                                                             |
