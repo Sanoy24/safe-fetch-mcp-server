@@ -310,7 +310,8 @@ fetch-server CVEs, all enforced in CI.
 | Env var                               | Default     | Meaning                                                                                                             |
 | ------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
 | `SAFE_FETCH_ALLOW_LOCAL`              | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
-| `SAFE_FETCH_ALLOWLIST`                | _(empty)_   | Comma-separated host allowlist                                                                                      |
+| `SAFE_FETCH_ALLOWLIST`                | _(empty)_   | Comma-separated hosts or `*.domain` wildcards. When set, only matching hosts are allowed                            |
+| `SAFE_FETCH_DENYLIST`                 | _(empty)_   | Comma-separated hosts or `*.domain` wildcards that are always refused. Wins over the allowlist                      |
 | `SAFE_FETCH_MAX_BYTES`                | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
 | `SAFE_FETCH_TIMEOUT_MS`               | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
 | `SAFE_FETCH_MAX_REDIRECTS`            | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |

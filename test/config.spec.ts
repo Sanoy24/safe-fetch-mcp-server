@@ -41,6 +41,7 @@ describe("loadConfig", () => {
     expect(loadConfig({})).toEqual({
       allowLocal: false,
       allowlist: [],
+      denylist: [],
       maxBytes: 5_000_000,
       timeoutMs: 10_000,
       maxRedirects: 5,

@@ -8,7 +8,10 @@ export interface CacheConfig {
 
 export interface SafeFetchConfig {
   allowLocal: boolean;
+  /** Host patterns ("host" or "*.host"); when non-empty, only these hosts are allowed. */
   allowlist: readonly string[];
+  /** Host patterns that are always refused; wins over the allowlist. */
+  denylist?: readonly string[];
   maxBytes: number;
   timeoutMs: number;
   maxRedirects: number;
@@ -27,8 +30,10 @@ export interface SafeFetchConfig {
   compatFetchTool?: boolean;
 }
 
-/** Thrown for an invalid environment variable. The message names the variable. */
-export class ConfigError extends Error {}
+import { ConfigError } from "./configError.js";
+import { parseHostPatterns } from "./security/hostPatterns.js";
+
+export { ConfigError };
 
 // Invalid values fail startup instead of silently falling back to a default: a
 // typo in a security setting should be loud, not quietly "fixed".
@@ -96,7 +101,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
       env["SAFE_FETCH_ALLOW_LOCAL"],
       false
     ),
-    allowlist: parseList(env["SAFE_FETCH_ALLOWLIST"]),
+    allowlist: parseHostPatterns("SAFE_FETCH_ALLOWLIST", env["SAFE_FETCH_ALLOWLIST"]),
+    denylist: parseHostPatterns("SAFE_FETCH_DENYLIST", env["SAFE_FETCH_DENYLIST"]),
     maxBytes: parseIntEnv("SAFE_FETCH_MAX_BYTES", env["SAFE_FETCH_MAX_BYTES"], 5_000_000),
     timeoutMs: parseIntEnv("SAFE_FETCH_TIMEOUT_MS", env["SAFE_FETCH_TIMEOUT_MS"], 10_000),
     maxRedirects: parseIntEnv(

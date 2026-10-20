@@ -1,5 +1,6 @@
 import type { SafeFetchConfig } from "../config.js";
 import { GuardError } from "./errors.js";
+import { hostMatches } from "./hostPatterns.js";
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 const DEFAULT_PORTS: Readonly<Record<string, number>> = { "http:": 80, "https:": 443 };
@@ -11,7 +12,10 @@ export class UrlPolicyError extends GuardError {
   }
 }
 
-export type UrlPolicy = Pick<SafeFetchConfig, "allowlist" | "httpsOnly" | "allowedPorts">;
+export type UrlPolicy = Pick<
+  SafeFetchConfig,
+  "allowlist" | "denylist" | "httpsOnly" | "allowedPorts"
+>;
 
 /** The port a connection to `url` will actually use, including the scheme default. */
 export function effectivePort(url: URL): number {
@@ -59,11 +63,13 @@ export function parseAndValidateUrl(rawUrl: string, policy: UrlPolicy): URL {
     }
   }
 
-  if (policy.allowlist.length > 0) {
-    const host = url.hostname.toLowerCase();
-    if (!policy.allowlist.includes(host)) {
-      throw new UrlPolicyError(`Refused: host "${host}" is not in SAFE_FETCH_ALLOWLIST.`);
-    }
+  const host = url.hostname.toLowerCase();
+  // Deny wins over allow, so a broad allow pattern can carve out exceptions.
+  if (hostMatches(host, policy.denylist ?? [])) {
+    throw new UrlPolicyError(`Refused: host "${host}" is on SAFE_FETCH_DENYLIST.`);
+  }
+  if (policy.allowlist.length > 0 && !hostMatches(host, policy.allowlist)) {
+    throw new UrlPolicyError(`Refused: host "${host}" is not in SAFE_FETCH_ALLOWLIST.`);
   }
 
   return url;
