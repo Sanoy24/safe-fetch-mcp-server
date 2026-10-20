@@ -6,6 +6,13 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Public SSRF test vectors (`docs/test-vectors.md`, `test/vectors.spec.ts`): 51
+  bypass classes from real fetch-server CVEs, each required to fail with
+  `POLICY_REJECTED`. Metadata-class vectors are also re-run with
+  `SAFE_FETCH_ALLOW_LOCAL=true`.
+
 ## [0.3.0] - 2026-10-19
 
 ### Security
