@@ -2,7 +2,7 @@
 // installs the tarball into an empty directory, and drives the installed binary
 // over stdio with the MCP SDK client. Catches what unit tests can't: missing
 // files in the tarball, a broken bin/shebang, or runtime-only dependency gaps.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -104,6 +104,38 @@ try {
   } finally {
     await compat.close();
   }
+
+  // A client that disconnects mid-request must not make the server crash with EPIPE.
+  const gone = spawn(process.execPath, [binPath], { stdio: ["pipe", "pipe", "pipe"] });
+  let goneStderr = "";
+  gone.stderr.on("data", (d) => (goneStderr += d));
+  const goneExit = new Promise((resolve) => gone.on("exit", (code) => resolve(code)));
+  gone.stdin.write(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: "x", version: "0" }
+      }
+    }) + "\n"
+  );
+  gone.stdout.destroy(); // the client goes away before reading the reply
+  setTimeout(() => gone.stdin.end(), 500);
+  const goneCode = await Promise.race([
+    goneExit,
+    new Promise((resolve) => setTimeout(() => (gone.kill(), resolve("timeout")), 10_000))
+  ]);
+  check(
+    !/EPIPE|Unhandled 'error'/.test(goneStderr),
+    "client disconnect does not crash with EPIPE"
+  );
+  check(
+    goneCode === 0 || goneCode === null,
+    `client disconnect exits cleanly (code ${goneCode})`
+  );
 
   const bad = spawnSync(process.execPath, [binPath], {
     env: { ...process.env, SAFE_FETCH_TIMEOUT_MS: "abc" },
