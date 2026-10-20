@@ -6,8 +6,24 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`fetch_url` now returns the main content by default** instead of the whole page.
+  Pass `extract: "full"` for the previous behaviour. The compat `fetch` tool also defaults
+  to main content, which matches the reference server's readability-based extraction.
+
 ### Added
 
+- Main-content extraction (`extract: "main" | "full"`) using Mozilla Readability on a
+  linkedom DOM. Neither library has network access. Chosen by a benchmark on 14 real
+  pages: 44% less text overall, 75% less on Wikipedia. It falls back to the full page
+  (`extraction: "fallback-full"`) when extraction returns almost nothing from a
+  substantial page, loses most code blocks, or the DOM exceeds 30,000 elements.
+- Page metadata in `structuredContent`: `title`, `description`, `byline`, `lang`,
+  `canonicalUrl`, `publishedAt`, `siteName`, also read from the YAML front matter of
+  server-rendered markdown. These come from the page, so each field is capped at 300
+  characters with control characters stripped.
+- `extraction` in `structuredContent`: `main`, `full`, `fallback-full` or `none`.
 - Compressed responses: requests accept gzip, br and deflate, including raw deflate,
   which is detected automatically. The body is decompressed while streaming, and
   `SAFE_FETCH_MAX_BYTES` applies to the **decompressed** size, so a decompression bomb stops

@@ -8,7 +8,8 @@ import {
   isRetryable,
   type FetchErrorCode
 } from "../security/errors.js";
-import { decodeBody, isTextualContentType, toMarkdown } from "../content/toMarkdown.js";
+import { decodeBody, isTextualContentType } from "../content/toMarkdown.js";
+import { extractContent, type PageMetadata } from "../content/extract.js";
 
 export const DEFAULT_MAX_CHARS = 20_000;
 
@@ -20,6 +21,12 @@ export const FetchUrlInput = z
       .default("markdown")
       .describe(
         "Output format. 'markdown' (default) converts HTML; 'raw' returns the text as-is."
+      ),
+    extract: z
+      .enum(["main", "full"])
+      .default("main")
+      .describe(
+        "'main' (default) keeps the article and drops navigation, banners and footers, falling back to the full page if extraction looks lossy; 'full' converts the whole page. Ignored for format 'raw'."
       ),
     max_bytes: z
       .number()
@@ -88,6 +95,28 @@ export const FetchUrlOutput = z.object({
     .describe(
       "Token count the site reported for its server-rendered markdown (x-markdown-tokens), when it sent markdown."
     ),
+  extraction: z
+    .enum(["main", "full", "fallback-full", "none"])
+    .optional()
+    .describe(
+      "What text was returned: 'main' content, the 'full' page, 'fallback-full' (main extraction looked lossy, so the full page was returned), or 'none' (not HTML, or format 'raw')."
+    ),
+  title: z.string().optional().describe("Page title (from the page; untrusted)."),
+  description: z
+    .string()
+    .optional()
+    .describe("Page description (from the page; untrusted)."),
+  byline: z.string().optional().describe("Author line (from the page; untrusted)."),
+  lang: z.string().optional().describe("Page language (from the page; untrusted)."),
+  canonicalUrl: z
+    .string()
+    .optional()
+    .describe("Canonical URL declared by the page (untrusted)."),
+  publishedAt: z
+    .string()
+    .optional()
+    .describe("Publication date declared by the page (untrusted)."),
+  siteName: z.string().optional().describe("Site name (from the page; untrusted)."),
   fromCache: z
     .boolean()
     .optional()
@@ -186,10 +215,15 @@ export async function runFetchUrl(
       );
     }
 
-    const text =
+    const extracted =
       input.format === "raw"
-        ? decodeBody(result.body, result.contentType)
-        : toMarkdown(result.body, result.contentType);
+        ? {
+            markdown: decodeBody(result.body, result.contentType),
+            extraction: "none" as const,
+            metadata: {} as PageMetadata
+          }
+        : extractContent(result.body, result.contentType, input.extract, result.finalUrl);
+    const text = extracted.markdown;
 
     const start = Math.min(input.start_index, text.length);
     const end = Math.min(start + input.max_chars, text.length);
@@ -206,6 +240,7 @@ export async function runFetchUrl(
       status: result.status,
       bytes: result.body.byteLength,
       truncated: result.truncated,
+      extraction: extracted.extraction,
       fromCache: result.fromCache === true
     });
 
@@ -222,6 +257,8 @@ export async function runFetchUrl(
         totalChars: text.length,
         startIndex: start,
         nextStartIndex,
+        extraction: extracted.extraction,
+        ...extracted.metadata,
         fromCache: result.fromCache === true,
         ...(result.markdownTokens !== undefined
           ? { markdownTokens: result.markdownTokens }
