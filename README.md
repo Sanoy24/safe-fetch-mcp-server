@@ -212,13 +212,23 @@ This domain is for use in documentation examples without needing permission.
 
 ## The `fetch_url` tool
 
-| Argument      | Default      | Meaning                                                                  |
-| ------------- | ------------ | ------------------------------------------------------------------------ |
-| `url`         | _(required)_ | Absolute `http(s)` URL                                                   |
-| `format`      | `markdown`   | `markdown` converts HTML; `raw` returns the text as-is                   |
-| `max_chars`   | `20000`      | Most characters returned per call                                        |
-| `start_index` | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex` |
-| `max_bytes`   | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it       |
+| Argument      | Default      | Meaning                                                                                                                                               |
+| ------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`         | _(required)_ | Absolute `http(s)` URL                                                                                                                                |
+| `format`      | `markdown`   | `markdown` converts HTML; `raw` returns the text as-is                                                                                                |
+| `extract`     | `main`       | `main` keeps the article and drops menus, banners and footers (falls back to the full page if extraction looks lossy); `full` converts the whole page |
+| `max_chars`   | `20000`      | Most characters returned per call                                                                                                                     |
+| `start_index` | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex`                                                                              |
+| `max_bytes`   | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it                                                                                    |
+
+**Main content by default.** Pages are reduced to their main content with Mozilla
+Readability. On 14 real pages (docs, Wikipedia, GitHub, blogs, news, forums) that's 44%
+less text overall, and 75% less on Wikipedia, where the article now starts at the top
+instead of after ~9,000 characters of menus. If extraction looks lossy (e.g. it would drop
+most code samples), the full page is returned instead and `extraction` says
+`fallback-full`. Page metadata (`title`, `description`, `byline`, `lang`, `canonicalUrl`,
+`publishedAt`, `siteName`) comes back too. It's page-controlled, so it's length-capped and
+treated as untrusted.
 
 Successful results carry `structuredContent` with the page `text` (the same framed text as
 the content block, for clients that only show structured output), `status`, `finalUrl`,

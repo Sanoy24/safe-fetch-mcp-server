@@ -16,7 +16,7 @@ const TEXTUAL_TYPES = new Set([
   "application/ecmascript"
 ]);
 
-function baseType(contentType: string): string {
+export function baseType(contentType: string): string {
   return contentType.split(";")[0]?.trim().toLowerCase() ?? "";
 }
 
@@ -57,6 +57,11 @@ export function decodeBody(body: Buffer, contentType: string): string {
  * responsible for checking isTextualContentType first — binary content should
  * never reach it.
  */
+/** Converts an HTML string (a whole page or an extracted fragment) to markdown. */
+export function htmlToMarkdown(html: string): string {
+  return turndownService.turndown(html);
+}
+
 export function toMarkdown(body: Buffer, contentType: string): string {
   const base = baseType(contentType);
   const text = decodeBody(body, contentType);
