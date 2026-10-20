@@ -8,6 +8,11 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Markdown content negotiation: requests send `Accept: text/markdown` first, so sites
+  that support it (Cloudflare "Markdown for Agents", Vercel, HackMD) return
+  server-rendered markdown, passed through untouched. In a real check, a Cloudflare docs
+  page was 176 KB as HTML and 16 KB as markdown. A site-reported `x-markdown-tokens`
+  count is exposed as `markdownTokens`.
 - `*.domain` wildcards in `SAFE_FETCH_ALLOWLIST` (subdomains at any depth, not the
   apex), and a new `SAFE_FETCH_DENYLIST` that wins over the allowlist. Matching
   ignores case and trailing dots, and Unicode entries are normalized to punycode.

@@ -22,6 +22,8 @@ export interface SafeFetchResult {
   readonly etag?: string;
   readonly lastModified?: string;
   readonly cacheControl?: string;
+  /** Token count the site reported for its markdown (x-markdown-tokens), if any. */
+  readonly markdownTokens?: number;
 }
 
 /**
@@ -52,6 +54,12 @@ interface RawResponse {
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+// Markdown content negotiation: sites that support it (Cloudflare "Markdown for Agents",
+// Vercel, HackMD, ...) return server-rendered markdown; everyone else falls back to HTML
+// or whatever they serve. */* keeps every server answering.
+const ACCEPT =
+  "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.9, text/plain;q=0.8, application/json;q=0.8, */*;q=0.5";
 
 function timeoutError(cfg: SafeFetchConfig): SafeFetchError {
   return new SafeFetchError(
@@ -128,6 +136,7 @@ function performPinnedRequest(
           // url.host keeps a non-default port, as RFC 9110 requires.
           Host: url.host,
           "User-Agent": "safe-fetch-mcp-server",
+          Accept: ACCEPT,
           ...extraHeaders
         }
       },
@@ -310,6 +319,11 @@ export async function fetchWithRedirects(
       const etag = firstHeader(response.headers.etag);
       const lastModified = firstHeader(response.headers["last-modified"]);
       const cacheControl = firstHeader(response.headers["cache-control"]);
+      const tokensHeader = firstHeader(response.headers["x-markdown-tokens"])?.trim();
+      const markdownTokens =
+        tokensHeader !== undefined && /^\d{1,9}$/.test(tokensHeader)
+          ? Number(tokensHeader)
+          : undefined;
 
       return {
         status: response.status,
@@ -320,7 +334,8 @@ export async function fetchWithRedirects(
         truncated: response.truncated,
         ...(etag !== undefined ? { etag } : {}),
         ...(lastModified !== undefined ? { lastModified } : {}),
-        ...(cacheControl !== undefined ? { cacheControl } : {})
+        ...(cacheControl !== undefined ? { cacheControl } : {}),
+        ...(markdownTokens !== undefined ? { markdownTokens } : {})
       };
     }
   } finally {
