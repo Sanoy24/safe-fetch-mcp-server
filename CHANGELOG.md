@@ -6,6 +6,16 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Page text was missing in some clients.** Clients that show the model only
+  `structuredContent` (Claude Code, for one) received the metadata but **not the page
+  text**, so agents couldn't read anything. This affected 0.2.0–0.4.0. `structuredContent`
+  now carries the framed page text (`text`) and, on errors, the refusal `message`,
+  identical to the text content block. Verified end to end through Claude Code.
+- The stdio server no longer crashes with an `EPIPE` stack trace when a client
+  disconnects mid-request. It exits cleanly.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added
