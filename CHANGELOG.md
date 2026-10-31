@@ -6,6 +6,14 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
+### Security
+
+- Updated dependencies to clear every `npm audit` advisory, including a **high-severity
+  `body-parser` denial of service** that was reachable in HTTP mode (2.3.0 → 2.4.0), plus
+  `fast-uri` and `@hono/node-server`. Dev tooling is clean too.
+
 ### Changed
 
 - **`fetch_url` now returns the main content by default** instead of the whole page.
@@ -216,7 +224,8 @@ this project follows [Semantic Versioning](https://semver.org/).
 - External validation via [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit):
   13 findings → 2, zero critical/high remaining. See `SECURITY.md`.
 
-[Unreleased]: https://github.com/Sanoy24/safe-fetch-mcp-server/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Sanoy24/safe-fetch-mcp-server/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Sanoy24/safe-fetch-mcp-server/releases/tag/v0.3.0
