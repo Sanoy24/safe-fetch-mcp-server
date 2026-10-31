@@ -1,6 +1,6 @@
 {
   "name": "safe-fetch-mcp-server",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "A secure-by-default MCP server for fetching web content: SSRF, DNS-rebinding, and redirect-to-internal protection with post-resolution IP validation.",
   "mcpName": "io.github.Sanoy24/safe-fetch",
   "type": "module",
