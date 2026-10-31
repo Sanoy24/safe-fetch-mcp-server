@@ -74,5 +74,8 @@
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
   },
-  "//": "@modelcontextprotocol/sdk floor is deliberate: 1.21.1 first fixed DNS rebinding (CVE-2025-66414/66416); keep it on the latest 1.x and re-verify periodically."
+  "//": "@modelcontextprotocol/sdk floor is deliberate: 1.21.1 first fixed DNS rebinding (CVE-2025-66414/66416); keep it on the latest 1.x and re-verify periodically. overrides.minimatch: the ESLint toolchain still pins minimatch ^10, which has an advisory (GHSA-g3hv-75wg-m249, fixed in 11.0.1); dev-only. Remove the override once eslint and typescript-eslint depend on minimatch >=11.",
+  "overrides": {
+    "minimatch": "^11.0.3"
+  }
 }
