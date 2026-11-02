@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/npm/l/safe-fetch-mcp-server.svg)](LICENSE)
 [![Node](https://img.shields.io/node/v/safe-fetch-mcp-server.svg)](package.json)
 
+[![Safe Fetch MCP server](https://mcprush.com/badge/safe-fetch-mcp/card.svg)](https://mcprush.com/to/safe-fetch-mcp?ref=badge)
+
 An MCP server that fetches web content for an agent without letting that agent
 reach your internal network. Not just "has SSRF protection" — everyone claims
 that — but a regression test for each edge case that produced real 2026 CVEs in
