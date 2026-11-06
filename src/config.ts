@@ -32,6 +32,10 @@ export interface SafeFetchConfig {
   robots?: "respect" | "ignore";
   /** User-Agent on every request. Undefined means DEFAULT_USER_AGENT. */
   userAgent?: string;
+  /** Outbound requests at once, overall. Default 16. */
+  maxConcurrent?: number;
+  /** Outbound requests at once to one host. Default 4. */
+  maxPerHost?: number;
 }
 
 import { createRequire } from "node:module";
@@ -188,6 +192,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
     },
     logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"]),
     robots: parseRobotsPolicy(env["SAFE_FETCH_ROBOTS"]),
+    maxConcurrent: parseIntEnv(
+      "SAFE_FETCH_MAX_CONCURRENT",
+      env["SAFE_FETCH_MAX_CONCURRENT"],
+      16
+    ),
+    maxPerHost: parseIntEnv("SAFE_FETCH_MAX_PER_HOST", env["SAFE_FETCH_MAX_PER_HOST"], 4),
     userAgent: parseUserAgent(env["SAFE_FETCH_USER_AGENT"]),
     compatFetchTool: parseBoolean(
       "SAFE_FETCH_COMPAT_TOOL",

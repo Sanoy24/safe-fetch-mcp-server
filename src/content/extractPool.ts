@@ -12,6 +12,8 @@ import type { ExtractJob } from "./extractWorker.js";
 const MAX_WORKERS = 4;
 const WORKER_MEMORY_MB = 512;
 const MAX_QUEUE_WAIT_MS = 30_000;
+// Queued jobs hold their whole fetched body in memory, so the queue is bounded too.
+const MAX_QUEUED_JOBS = 32;
 
 interface PendingJob {
   readonly input: ExtractJob;
@@ -125,6 +127,14 @@ export function extractInWorker(
   input: ExtractJob,
   budgetMs: number
 ): Promise<ExtractedContent> {
+  if (queue.length >= MAX_QUEUED_JOBS) {
+    return Promise.reject(
+      new GuardError(
+        "PROCESSING_LIMIT",
+        "Refused: the server is busy converting other pages. Try again shortly."
+      )
+    );
+  }
   return new Promise((resolve, reject) => {
     const job: PendingJob = { input, budgetMs, resolve, reject };
     job.queueTimer = setTimeout(() => {

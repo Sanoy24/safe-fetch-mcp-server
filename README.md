@@ -384,6 +384,8 @@ fetch-server CVEs, all enforced in CI.
 | `SAFE_FETCH_LOG_FORMAT`                     | `text`                                        | `json` writes one JSON object per audit line to stderr                                                              |
 | `SAFE_FETCH_ROBOTS` / `--ignore-robots-txt` | `respect`                                     | `respect` checks robots.txt for each site and redirect hop; `ignore` skips it                                       |
 | `SAFE_FETCH_USER_AGENT` / `--user-agent`    | `safe-fetch-mcp-server/<version> (+repo URL)` | User-Agent on every request. Its leading name is what robots.txt groups match                                       |
+| `SAFE_FETCH_MAX_CONCURRENT`                 | `16`                                          | Outbound requests at once, overall. Extra requests wait, within `SAFE_FETCH_TIMEOUT_MS`                             |
+| `SAFE_FETCH_MAX_PER_HOST`                   | `4`                                           | Outbound requests at once to one host                                                                               |
 | `SAFE_FETCH_COMPAT_TOOL` / `--compat`       | `false`                                       | Also expose the reference server's `fetch` tool and prompt (drop-in migration)                                      |
 
 Invalid values stop the server at startup with a message naming the variable.
