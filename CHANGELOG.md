@@ -6,6 +6,14 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Fixed a denial of service: slow-to-convert pages blocked the server past the deadline.**
+  HTML-to-markdown cost grew quadratically (about 18 s for 2 MB of plain paragraphs), on the
+  main thread, after `SAFE_FETCH_TIMEOUT_MS` had stopped applying. Conversion now runs in a
+  worker thread with a hard time and memory limit, and large pages convert in batches. Over
+  budget returns the new error code `PROCESSING_LIMIT`.
+
 ## [0.5.0] - 2026-10-31
 
 ### Security

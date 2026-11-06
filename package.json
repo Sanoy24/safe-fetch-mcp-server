@@ -32,6 +32,7 @@
     "dev": "tsc -p tsconfig.build.json --watch",
     "start": "node dist/index.js",
     "start:http": "node dist/index.js --http",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
