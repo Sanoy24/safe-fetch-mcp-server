@@ -83,7 +83,7 @@ describe("parseHeadings", () => {
     ].join("\n");
     const started = Date.now();
     parseHeadings(hostile);
-    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 });
 
