@@ -218,15 +218,18 @@ This domain is for use in documentation examples without needing permission.
 
 ## The `fetch_url` tool
 
-| Argument      | Default      | Meaning                                                                                                                                               |
-| ------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`         | _(required)_ | Absolute `http(s)` URL                                                                                                                                |
-| `format`      | `markdown`   | `markdown` converts HTML; `raw` returns the text as-is                                                                                                |
-| `extract`     | `main`       | `main` keeps the article and drops menus, banners and footers (falls back to the full page if extraction looks lossy); `full` converts the whole page |
-| `images`      | `alt`        | `alt` replaces images with their alt text; `keep` keeps http(s) images as markdown                                                                    |
-| `max_chars`   | `20000`      | Most characters returned per call                                                                                                                     |
-| `start_index` | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex`                                                                              |
-| `max_bytes`   | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it                                                                                    |
+| Argument       | Default      | Meaning                                                                                                                                               |
+| -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`          | _(required)_ | Absolute `http(s)` URL                                                                                                                                |
+| `format`       | `markdown`   | `markdown` converts HTML; `raw` returns the text as-is                                                                                                |
+| `extract`      | `main`       | `main` keeps the article and drops menus, banners and footers (falls back to the full page if extraction looks lossy); `full` converts the whole page |
+| `images`       | `alt`        | `alt` replaces images with their alt text; `keep` keeps http(s) images as markdown                                                                    |
+| `json_pointer` |              | One value from a JSON response, by [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901), such as `/info/version`                                    |
+| `section`      |              | One heading and everything under it. Exact title first, then partial, ignoring case                                                                   |
+| `outline`      | `false`      | Only the page's headings, each with the `start_index` that jumps to it                                                                                |
+| `max_chars`    | `20000`      | Most characters returned per call                                                                                                                     |
+| `start_index`  | `0`          | Character offset for paging. Pass the previous result's `nextStartIndex`                                                                              |
+| `max_bytes`    | server limit | Lowers `SAFE_FETCH_MAX_BYTES` for this call. It can never raise it                                                                                    |
 
 **Hidden text is removed, as far as a parser can tell.** Before conversion this strips elements
 marked `hidden` or `aria-hidden`, inline `display:none`, `visibility:hidden`, `font-size:0`,
@@ -265,6 +268,10 @@ version as the first, without downloading it again, for up to five minutes (`fro
 Starting again from `start_index: 0` gets a fresh copy. Only text
 content types are returned: HTML, `text/*`, JSON, XML, and `+json`/`+xml` types.
 
+**Reading part of a page** saves tokens on long pages. Use `outline: true` to see the headings, then
+`section` or `start_index` to read one, or `json_pointer` for one value from an API. These read from
+the same copy of the page as paging does, and all output is still framed as untrusted data.
+
 **Markdown negotiation:** every request asks for `text/markdown` first. Sites that support
 it (Cloudflare "Markdown for Agents", Vercel, HackMD, ...) return server-rendered markdown,
 which is passed through untouched. For example, Cloudflare's docs page on the feature is
@@ -287,6 +294,7 @@ Failures set `isError: true` and `structuredContent.error = { code, retryable, m
 | `UNSUPPORTED_CONTENT_TYPE` | no        | Response isn't text (images, PDFs, binaries, ...)                                               |
 | `ROBOTS_DISALLOWED`        | no        | The site's robots.txt disallows this URL                                                        |
 | `ROBOTS_UNAVAILABLE`       | yes       | robots.txt returned 429 or 5xx, or timed out, so the site's rules are unknown                   |
+| `SELECTION_NOT_FOUND`      | no        | The `json_pointer` or `section` isn't on this page                                              |
 | `INTERNAL_ERROR`           | no        | Unexpected failure. Details are in the server's stderr log                                      |
 
 ### Companion agent skill

@@ -39,6 +39,9 @@ this project follows [Semantic Versioning](https://semver.org/).
 - **robots.txt** is checked for each site and redirect hop (RFC 9309), with new error codes
   `ROBOTS_DISALLOWED` and `ROBOTS_UNAVAILABLE`. Set `SAFE_FETCH_ROBOTS=ignore` or
   `--ignore-robots-txt` to turn it off.
+- **Reading part of a page:** `json_pointer` returns one value from a JSON response, `section` returns
+  one heading and what's under it, and `outline` lists the headings with offsets. New error code
+  `SELECTION_NOT_FOUND`.
 - `SAFE_FETCH_USER_AGENT` and `--user-agent`.
 - **Stable pagination:** later chunks of a long page read the same version as the first, without
   downloading it again, for up to five minutes (`SAFE_FETCH_SNAPSHOT_TTL_MS`). `fromSnapshot` marks them.

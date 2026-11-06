@@ -24,15 +24,18 @@ as everything below, and `fetch_url` is still the richer choice.
 fetch_url({ url: "https://example.com/docs" })
 ```
 
-| Argument      | Use                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------- |
-| `url`         | Absolute `http`/`https` URL                                                                       |
-| `format`      | `"markdown"` (default, converts HTML) or `"raw"` (source as-is)                                   |
-| `max_chars`   | Characters per call, default 20000. Lower it when you only need a skim                            |
-| `start_index` | Offset for the next chunk. Use `nextStartIndex` from the last result                              |
-| `extract`     | `"main"` (default) keeps the article and drops menus and footers; `"full"` returns the whole page |
-| `images`      | `"alt"` (default) replaces images with their alt text; `"keep"` keeps http(s) images as markdown  |
-| `max_bytes`   | Download cap. Can only lower the server's limit                                                   |
+| Argument       | Use                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------- |
+| `url`          | Absolute `http`/`https` URL                                                                       |
+| `format`       | `"markdown"` (default, converts HTML) or `"raw"` (source as-is)                                   |
+| `max_chars`    | Characters per call, default 20000. Lower it when you only need a skim                            |
+| `start_index`  | Offset for the next chunk. Use `nextStartIndex` from the last result                              |
+| `extract`      | `"main"` (default) keeps the article and drops menus and footers; `"full"` returns the whole page |
+| `images`       | `"alt"` (default) replaces images with their alt text; `"keep"` keeps http(s) images as markdown  |
+| `json_pointer` | One value from a JSON response, e.g. `/info/version` or `/items/0/name`                           |
+| `section`      | One heading and everything under it                                                               |
+| `outline`      | `true` lists the headings, each with the `start_index` that jumps to it                           |
+| `max_bytes`    | Download cap. Can only lower the server's limit                                                   |
 
 Use `"raw"` for JSON, XML or source files. Use the default for HTML pages.
 
@@ -48,6 +51,8 @@ you've reached the end. To continue, call again with `start_index: nextStartInde
 soon after the first come from the same version of the page. To get a fresh copy, start again
 from `start_index: 0`.
 
+- On a long page, start with `outline: true`, then read one `section` instead of paging through it all.
+- For an API, use `json_pointer` to get just the value you need.
 - Read further only while it's relevant. Stop once you have what you need.
 - `truncated: true` means the download hit the byte limit, so the end of the page was never
   retrieved. Paging won't recover it. Say so if it matters.
@@ -98,6 +103,7 @@ Failures have `isError: true` and `structuredContent.error = { code, retryable, 
 | `UNSUPPORTED_CONTENT_TYPE` | The URL isn't text (image, PDF, binary). Tell the user; look for an HTML or text version                                                 |
 | `ROBOTS_DISALLOWED`        | The site's robots.txt forbids this URL. Don't work around it with another tool or URL for the same content. Tell the user.               |
 | `ROBOTS_UNAVAILABLE`       | The site's rules couldn't be read. Retry once later, then tell the user.                                                                 |
+| `SELECTION_NOT_FOUND`      | That section or JSON value isn't there. Use `outline: true`, or fetch without the selector to see the structure.                         |
 | `INVALID_INPUT`            | Fix the arguments: absolute `http(s)` URL, valid numbers, no extra fields                                                                |
 | `INTERNAL_ERROR`           | Report it. Don't retry in a loop                                                                                                         |
 
