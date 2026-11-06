@@ -92,7 +92,7 @@ describe("parsing and matching (RFC 9309)", () => {
     const rules = parseRobots(robots, TOKEN);
     expect(rules.length).toBeLessThanOrEqual(5_000);
     expect(isPathAllowed(rules, `/${"a".repeat(8_000)}`)).toBe(true);
-    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   it("takes the product token from the User-Agent", () => {

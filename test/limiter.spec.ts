@@ -87,14 +87,14 @@ describe("outbound concurrency limits", () => {
   });
 
   it("doesn't let a busy host hold up another host", async () => {
-    const port = await serve(200);
-    const cfg = testConfig({ maxPerHost: 1, timeoutMs: 5_000 });
+    const port = await serve(800);
+    const cfg = testConfig({ maxPerHost: 1, timeoutMs: 10_000 });
     const busy = Array.from({ length: 3 }, () =>
       safeFetch(`http://busy.test:${port}/`, cfg, { resolve: toLocal })
     );
     const started = Date.now();
     await safeFetch(`http://other.test:${port}/`, cfg, { resolve: toLocal });
-    expect(Date.now() - started).toBeLessThan(500);
+    expect(Date.now() - started).toBeLessThan(1_600); // 2,400 if it had to queue
     await Promise.all(busy);
   });
 
