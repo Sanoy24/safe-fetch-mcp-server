@@ -36,6 +36,10 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **robots.txt** is checked for each site and redirect hop (RFC 9309), with new error codes
+  `ROBOTS_DISALLOWED` and `ROBOTS_UNAVAILABLE`. Set `SAFE_FETCH_ROBOTS=ignore` or
+  `--ignore-robots-txt` to turn it off.
+- `SAFE_FETCH_USER_AGENT` and `--user-agent`.
 - `retryAfterSeconds` in `structuredContent` for a 429 or 503 that says how long to wait. Values over
   a day are ignored.
 - The audit log now records invalid input (where it was wrong, never the values), every redirect
@@ -45,6 +49,8 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking: robots.txt is respected by default,** so URLs a site disallows are now refused.
+- The default User-Agent now includes the version and the project URL.
 - **Breaking: HTTP mode won't start on a non-loopback address without `SAFE_FETCH_HTTP_TOKEN`.** It
   used to print a warning and serve anyway. If your own proxy handles authentication, set
   `SAFE_FETCH_HTTP_INSECURE=true`.

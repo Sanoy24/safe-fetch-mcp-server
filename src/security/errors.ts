@@ -13,6 +13,8 @@ export const FETCH_ERROR_CODES = [
   "INVALID_RESPONSE",
   "PROCESSING_LIMIT",
   "UNSUPPORTED_CONTENT_TYPE",
+  "ROBOTS_DISALLOWED",
+  "ROBOTS_UNAVAILABLE",
   "INTERNAL_ERROR"
 ] as const;
 
@@ -23,7 +25,8 @@ export type FetchErrorCode = (typeof FETCH_ERROR_CODES)[number];
 const RETRYABLE_CODES: ReadonlySet<FetchErrorCode> = new Set([
   "DNS_RESOLUTION_FAILED",
   "CONNECTION_FAILED",
-  "TIMEOUT"
+  "TIMEOUT",
+  "ROBOTS_UNAVAILABLE"
 ]);
 
 export function isRetryable(code: FetchErrorCode): boolean {

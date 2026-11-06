@@ -28,12 +28,25 @@ export interface SafeFetchConfig {
   logFormat?: "text" | "json";
   /** Also expose the reference server's `fetch` tool and prompt. Default false. */
   compatFetchTool?: boolean;
+  /** loadConfig defaults this to "respect"; a config built without it doesn't check. */
+  robots?: "respect" | "ignore";
+  /** User-Agent on every request. Undefined means DEFAULT_USER_AGENT. */
+  userAgent?: string;
 }
 
+import { createRequire } from "node:module";
 import { ConfigError } from "./configError.js";
 import { parseHostPatterns } from "./security/hostPatterns.js";
 
 export { ConfigError };
+
+// Resolves to the package root from both src/ (tests) and dist/ (published).
+const { version } = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
+
+/** Says who is asking and where to find out more, so site owners can identify us. */
+export const DEFAULT_USER_AGENT = `safe-fetch-mcp-server/${version} (+https://github.com/Sanoy24/safe-fetch-mcp-server)`;
 
 // Invalid values fail startup instead of silently falling back to a default: a
 // typo in a security setting should be loud, not quietly "fixed".
@@ -94,6 +107,46 @@ function parseLogFormat(value: string | undefined): "text" | "json" {
   );
 }
 
+function parseRobotsPolicy(value: string | undefined): "respect" | "ignore" {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "" || normalized === "respect") return "respect";
+  if (normalized === "ignore") return "ignore";
+  throw new ConfigError(
+    `SAFE_FETCH_ROBOTS must be "respect" or "ignore" (got "${value}").`
+  );
+}
+
+// Printable ASCII only: this becomes a request header, so line breaks must never get in.
+function parseUserAgent(value: string | undefined): string {
+  const userAgent = value?.trim();
+  if (!userAgent) return DEFAULT_USER_AGENT;
+  if (userAgent.length > 256 || !/^[\x20-\x7e]+$/.test(userAgent)) {
+    throw new ConfigError(
+      "SAFE_FETCH_USER_AGENT must be printable ASCII and at most 256 characters."
+    );
+  }
+  return userAgent;
+}
+
+/**
+ * The reference fetch server's flags, plus --compat, as settings. Set before the config
+ * is first read, so switching servers is a one-line change to the args.
+ */
+export function applyCompatFlags(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (argv.includes("--compat")) env["SAFE_FETCH_COMPAT_TOOL"] = "true";
+  if (argv.includes("--ignore-robots-txt")) env["SAFE_FETCH_ROBOTS"] = "ignore";
+  argv.forEach((arg, index) => {
+    if (arg.startsWith("--user-agent=")) {
+      env["SAFE_FETCH_USER_AGENT"] = arg.slice("--user-agent=".length);
+    } else if (arg === "--user-agent" && argv[index + 1] !== undefined) {
+      env["SAFE_FETCH_USER_AGENT"] = argv[index + 1];
+    }
+  });
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfig {
   return {
     allowLocal: parseBoolean(
@@ -134,6 +187,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
       )
     },
     logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"]),
+    robots: parseRobotsPolicy(env["SAFE_FETCH_ROBOTS"]),
+    userAgent: parseUserAgent(env["SAFE_FETCH_USER_AGENT"]),
     compatFetchTool: parseBoolean(
       "SAFE_FETCH_COMPAT_TOOL",
       env["SAFE_FETCH_COMPAT_TOOL"],

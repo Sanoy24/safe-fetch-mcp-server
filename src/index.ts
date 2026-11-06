@@ -2,7 +2,13 @@
 import type { Server } from "node:http";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server.js";
-import { ConfigError, getConfig, isLoopbackHost, loadHttpConfig } from "./config.js";
+import {
+  applyCompatFlags,
+  ConfigError,
+  getConfig,
+  isLoopbackHost,
+  loadHttpConfig
+} from "./config.js";
 import { createHttpApp } from "./httpApp.js";
 
 // stdout is reserved for MCP protocol traffic in stdio mode; log only to stderr.
@@ -69,9 +75,7 @@ process.stdout.on("error", (err: NodeJS.ErrnoException) => {
 });
 
 async function main(): Promise<void> {
-  // --compat mirrors SAFE_FETCH_COMPAT_TOOL=true, so switching from the reference fetch
-  // server is a one-line change to the args. Set before the config is first read.
-  if (process.argv.includes("--compat")) process.env["SAFE_FETCH_COMPAT_TOOL"] = "true";
+  applyCompatFlags(process.argv.slice(2));
 
   // Validate every setting before accepting any request.
   getConfig();
