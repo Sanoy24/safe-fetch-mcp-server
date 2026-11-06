@@ -1,7 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { spawn } from "node:child_process";
 import * as http from "node:http";
-import { join } from "node:path";
 import * as zlib from "node:zlib";
 import type { AddressInfo } from "node:net";
 import { GuardError, safeFetch } from "../src/security/index.js";
@@ -55,24 +53,6 @@ describe("runtimeWarning", () => {
 
   it("says nothing on a patched runtime", () => {
     expect(runtimeWarning("24.22.1")).toBeNull();
-  });
-
-  it("is printed by the real server exactly when this runtime is affected", async () => {
-    const server = join(import.meta.dirname, "..", "dist", "index.js");
-    const child = spawn(process.execPath, [server], {
-      stdio: ["pipe", "ignore", "pipe"]
-    });
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
-    await new Promise<void>((resolve) => {
-      child.stderr.on("data", () => {
-        if (stderr.includes("running on stdio")) resolve();
-      });
-    });
-    child.kill();
-    expect(stderr.includes("CVE-2026-111497")).toBe(
-      !hasPatchedBrotli(process.versions.node)
-    );
   });
 });
 

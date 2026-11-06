@@ -93,6 +93,22 @@ try {
     await client.close();
   }
 
+  // The installed server warns exactly when this runtime has the Brotli decoder bug.
+  const [major, minor, patch] = process.versions.node.split(".").map(Number);
+  const fix = { 22: [23, 4], 24: [22, 1], 26: [12, 1] }[major];
+  const patched =
+    major > 26 ||
+    (fix !== undefined && (minor > fix[0] || (minor === fix[0] && patch >= fix[1])));
+  const started = spawnSync(process.execPath, [binPath], {
+    input: "",
+    timeout: 5_000,
+    encoding: "utf8"
+  });
+  check(
+    started.stderr.includes("CVE-2026-111497") === !patched,
+    `the Brotli warning matches Node ${process.versions.node}`
+  );
+
   // The 2026-07-28 protocol, from the installed package.
   const modern = new Client(
     { name: "smoke-modern", version: "0" },
