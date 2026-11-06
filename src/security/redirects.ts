@@ -3,7 +3,7 @@ import * as https from "node:https";
 import { isIP, type TcpSocketConnectOpts } from "node:net";
 import * as zlib from "node:zlib";
 import { Transform, type Readable, type TransformCallback } from "node:stream";
-import type { SafeFetchConfig } from "../config.js";
+import { DEFAULT_USER_AGENT, type SafeFetchConfig } from "../config.js";
 import { effectivePort, parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
 import { GuardError } from "./errors.js";
@@ -50,6 +50,8 @@ export interface SafeFetchOptions {
   readonly conditional?: ConditionalRequest;
   /** Test seam: the cache's clock. */
   readonly now?: () => number;
+  /** Extra check for each hop, after the guard has passed it and before any request to it. */
+  readonly checkHop?: (url: URL) => Promise<void>;
 }
 
 interface RawResponse {
@@ -221,7 +223,7 @@ function performPinnedRequest(
         headers: {
           // url.host keeps a non-default port, as RFC 9110 requires.
           Host: url.host,
-          "User-Agent": "safe-fetch-mcp-server",
+          "User-Agent": cfg.userAgent ?? DEFAULT_USER_AGENT,
           Accept: ACCEPT,
           "Accept-Encoding": ACCEPT_ENCODING,
           ...extraHeaders
@@ -402,6 +404,9 @@ export async function fetchWithRedirects(
         signal,
         () => timeoutError(cfg)
       );
+      if (options.checkHop) {
+        await untilAborted(options.checkHop(url), signal, () => timeoutError(cfg));
+      }
       const response = await performPinnedRequest(
         url,
         pinned,

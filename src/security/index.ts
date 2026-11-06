@@ -2,6 +2,7 @@ import { getConfig, type SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, ResolutionError } from "./resolveAndPin.js";
 import { fetchWithCache } from "./responseCache.js";
+import { assertRobotsAllow } from "./robots.js";
 import {
   SafeFetchError,
   type SafeFetchOptions,
@@ -42,5 +43,11 @@ export async function safeFetch(
 ): Promise<SafeFetchResult> {
   // The optional cache wraps the single fetch path; it never makes requests itself
   // and re-runs the guard on every hit (see responseCache.ts).
-  return fetchWithCache(rawUrl, cfg, options);
+  return fetchWithCache(
+    rawUrl,
+    cfg,
+    cfg.robots === "respect"
+      ? { ...options, checkHop: (url) => assertRobotsAllow(url, cfg, options) }
+      : options
+  );
 }

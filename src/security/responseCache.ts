@@ -135,6 +135,7 @@ async function assertChainStillAllowed(
     const url = parseAndValidateUrl(hop, cfg);
     await resolveAndPin(url.hostname, cfg.allowLocal, options.resolve);
     if (previous) assertRedirectAllowed(previous, url, cfg);
+    if (options.checkHop) await options.checkHop(url);
     previous = url;
   }
 }

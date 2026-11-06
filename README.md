@@ -60,9 +60,9 @@ What's different:
   classes in [`docs/test-vectors.md`](docs/test-vectors.md). That's the point of switching.
 - Results also include `structuredContent` (status, final URL, paging offsets, error codes),
   and page text is framed as untrusted data.
-- **Not supported yet:** the reference server's robots.txt check and its
-  `--ignore-robots-txt`, `--user-agent` and `--proxy-url` flags. Unknown flags are ignored.
-  robots.txt, user-agent and proxy support are planned.
+- `--ignore-robots-txt` and `--user-agent` work the same way. As in the reference server, robots.txt
+  applies to tool calls but not to the `fetch` prompt, which a person starts.
+- **Not supported yet:** `--proxy-url`. Unknown flags are ignored.
 
 ### Claude Code
 
@@ -283,6 +283,8 @@ Failures set `isError: true` and `structuredContent.error = { code, retryable, m
 | `INVALID_RESPONSE`         | no        | The response couldn't be decoded (corrupt or unsupported compression)                           |
 | `PROCESSING_LIMIT`         | no        | The page is too large or complex to convert in time. Try `format: "raw"` or a lower `max_bytes` |
 | `UNSUPPORTED_CONTENT_TYPE` | no        | Response isn't text (images, PDFs, binaries, ...)                                               |
+| `ROBOTS_DISALLOWED`        | no        | The site's robots.txt disallows this URL                                                        |
+| `ROBOTS_UNAVAILABLE`       | yes       | robots.txt returned 429 or 5xx, or timed out, so the site's rules are unknown                   |
 | `INTERNAL_ERROR`           | no        | Unexpected failure. Details are in the server's stderr log                                      |
 
 ### Companion agent skill
@@ -355,32 +357,34 @@ fetch-server CVEs, all enforced in CI.
 
 ## Configuration
 
-| Env var                               | Default     | Meaning                                                                                                             |
-| ------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `SAFE_FETCH_ALLOW_LOCAL`              | `false`     | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
-| `SAFE_FETCH_ALLOWLIST`                | _(empty)_   | Comma-separated hosts or `*.domain` wildcards. When set, only matching hosts are allowed                            |
-| `SAFE_FETCH_DENYLIST`                 | _(empty)_   | Comma-separated hosts or `*.domain` wildcards that are always refused. Wins over the allowlist                      |
-| `SAFE_FETCH_MAX_BYTES`                | `5000000`   | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
-| `SAFE_FETCH_TIMEOUT_MS`               | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
-| `SAFE_FETCH_MAX_REDIRECTS`            | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
-| `TRANSPORT` / `--http` flag           | stdio       | Switch to Streamable HTTP                                                                                           |
-| `HOST`                                | `127.0.0.1` | HTTP bind address. A non-loopback address needs `SAFE_FETCH_HTTP_TOKEN` or `SAFE_FETCH_HTTP_INSECURE=true`          |
-| `SAFE_FETCH_HTTP_TOKEN`               | _(empty)_   | Bearer token required on `POST /mcp`, at least 16 characters                                                        |
-| `SAFE_FETCH_HTTP_INSECURE`            | `false`     | Allow a non-loopback bind with no token, when your own proxy handles authentication                                 |
-| `SAFE_FETCH_ALLOWED_HOSTS`            | _(empty)_   | Extra hostnames accepted in the `Host` header, such as your proxy's public name                                     |
-| `SAFE_FETCH_TRUST_PROXY`              | `0`         | Number of reverse proxies in front of the server, so rate limits apply per client                                   |
-| `PORT`                                | `3000`      | HTTP port                                                                                                           |
-| `SAFE_FETCH_ALLOWED_ORIGINS`          | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
-| `SAFE_FETCH_RATE_LIMIT_MAX`           | `60`        | Requests per window, per IP (HTTP mode)                                                                             |
-| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS`     | `60000`     | Rate-limit window                                                                                                   |
-| `SAFE_FETCH_HTTPS_ONLY`               | `false`     | Refuse plain `http://` URLs and redirect hops                                                                       |
-| `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE`    | `false`     | Follow `https://` → `http://` redirects (refused by default)                                                        |
-| `SAFE_FETCH_ALLOWED_PORTS`            | _(any)_     | Comma-separated destination ports, e.g. `443,8443`. Default ports count (`:80`, `:443`)                             |
-| `SAFE_FETCH_CACHE_TTL_MS`             | `0` (off)   | Reuse responses this long. Every cache hit re-runs the full guard; stale entries revalidate with ETag/Last-Modified |
-| `SAFE_FETCH_CACHE_MAX_ENTRIES`        | `100`       | Cache entry limit (LRU)                                                                                             |
-| `SAFE_FETCH_CACHE_MAX_BYTES`          | `20000000`  | Total cached body bytes                                                                                             |
-| `SAFE_FETCH_LOG_FORMAT`               | `text`      | `json` writes one JSON object per audit line to stderr                                                              |
-| `SAFE_FETCH_COMPAT_TOOL` / `--compat` | `false`     | Also expose the reference server's `fetch` tool and prompt (drop-in migration)                                      |
+| Env var                                     | Default                                       | Meaning                                                                                                             |
+| ------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `SAFE_FETCH_ALLOW_LOCAL`                    | `false`                                       | Allow loopback/RFC-1918 targets (never allows metadata/link-local)                                                  |
+| `SAFE_FETCH_ALLOWLIST`                      | _(empty)_                                     | Comma-separated hosts or `*.domain` wildcards. When set, only matching hosts are allowed                            |
+| `SAFE_FETCH_DENYLIST`                       | _(empty)_                                     | Comma-separated hosts or `*.domain` wildcards that are always refused. Wins over the allowlist                      |
+| `SAFE_FETCH_MAX_BYTES`                      | `5000000`                                     | Response size cap. The tool's `max_bytes` argument can lower it, never raise it                                     |
+| `SAFE_FETCH_TIMEOUT_MS`                     | `10000`                                       | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
+| `SAFE_FETCH_MAX_REDIRECTS`                  | `5`                                           | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
+| `TRANSPORT` / `--http` flag                 | stdio                                         | Switch to Streamable HTTP                                                                                           |
+| `HOST`                                      | `127.0.0.1`                                   | HTTP bind address. A non-loopback address needs `SAFE_FETCH_HTTP_TOKEN` or `SAFE_FETCH_HTTP_INSECURE=true`          |
+| `SAFE_FETCH_HTTP_TOKEN`                     | _(empty)_                                     | Bearer token required on `POST /mcp`, at least 16 characters                                                        |
+| `SAFE_FETCH_HTTP_INSECURE`                  | `false`                                       | Allow a non-loopback bind with no token, when your own proxy handles authentication                                 |
+| `SAFE_FETCH_ALLOWED_HOSTS`                  | _(empty)_                                     | Extra hostnames accepted in the `Host` header, such as your proxy's public name                                     |
+| `SAFE_FETCH_TRUST_PROXY`                    | `0`                                           | Number of reverse proxies in front of the server, so rate limits apply per client                                   |
+| `PORT`                                      | `3000`                                        | HTTP port                                                                                                           |
+| `SAFE_FETCH_ALLOWED_ORIGINS`                | _(empty)_                                     | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
+| `SAFE_FETCH_RATE_LIMIT_MAX`                 | `60`                                          | Requests per window, per IP (HTTP mode)                                                                             |
+| `SAFE_FETCH_RATE_LIMIT_WINDOW_MS`           | `60000`                                       | Rate-limit window                                                                                                   |
+| `SAFE_FETCH_HTTPS_ONLY`                     | `false`                                       | Refuse plain `http://` URLs and redirect hops                                                                       |
+| `SAFE_FETCH_ALLOW_HTTPS_DOWNGRADE`          | `false`                                       | Follow `https://` → `http://` redirects (refused by default)                                                        |
+| `SAFE_FETCH_ALLOWED_PORTS`                  | _(any)_                                       | Comma-separated destination ports, e.g. `443,8443`. Default ports count (`:80`, `:443`)                             |
+| `SAFE_FETCH_CACHE_TTL_MS`                   | `0` (off)                                     | Reuse responses this long. Every cache hit re-runs the full guard; stale entries revalidate with ETag/Last-Modified |
+| `SAFE_FETCH_CACHE_MAX_ENTRIES`              | `100`                                         | Cache entry limit (LRU)                                                                                             |
+| `SAFE_FETCH_CACHE_MAX_BYTES`                | `20000000`                                    | Total cached body bytes                                                                                             |
+| `SAFE_FETCH_LOG_FORMAT`                     | `text`                                        | `json` writes one JSON object per audit line to stderr                                                              |
+| `SAFE_FETCH_ROBOTS` / `--ignore-robots-txt` | `respect`                                     | `respect` checks robots.txt for each site and redirect hop; `ignore` skips it                                       |
+| `SAFE_FETCH_USER_AGENT` / `--user-agent`    | `safe-fetch-mcp-server/<version> (+repo URL)` | User-Agent on every request. Its leading name is what robots.txt groups match                                       |
+| `SAFE_FETCH_COMPAT_TOOL` / `--compat`       | `false`                                       | Also expose the reference server's `fetch` tool and prompt (drop-in migration)                                      |
 
 Invalid values stop the server at startup with a message naming the variable.
 Nothing silently falls back to a default.

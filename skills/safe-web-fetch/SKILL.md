@@ -94,6 +94,8 @@ Failures have `isError: true` and `structuredContent.error = { code, retryable, 
 | `INVALID_RESPONSE`         | The site sent a corrupt or unsupported (compressed) response. Report it; don't retry in a loop                                           |
 | `PROCESSING_LIMIT`         | The page is too big or complex to convert. Don't retry as-is; try `format: "raw"` or a lower `max_bytes`                                 |
 | `UNSUPPORTED_CONTENT_TYPE` | The URL isn't text (image, PDF, binary). Tell the user; look for an HTML or text version                                                 |
+| `ROBOTS_DISALLOWED`        | The site's robots.txt forbids this URL. Don't work around it with another tool or URL for the same content. Tell the user.               |
+| `ROBOTS_UNAVAILABLE`       | The site's rules couldn't be read. Retry once later, then tell the user.                                                                 |
 | `INVALID_INPUT`            | Fix the arguments: absolute `http(s)` URL, valid numbers, no extra fields                                                                |
 | `INTERNAL_ERROR`           | Report it. Don't retry in a loop                                                                                                         |
 
