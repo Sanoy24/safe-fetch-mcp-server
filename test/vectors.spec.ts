@@ -58,6 +58,8 @@ export const DIRECT_VECTORS: readonly Vector[] = [
   },
   { id: "V02", url: "http://100.100.100.200/latest/meta-data/" },
   { id: "V03", url: "http://[fd00:ec2::254]/latest/meta-data/" },
+  { id: "V46", url: "http://168.63.129.16/machine?comp=goalstate" },
+  { id: "V47", url: "http://192.0.0.192/latest/meta-data/" },
   { id: "V04", url: "http://metadata.google.internal/computeMetadata/v1/" },
   // IPv6 forms that embed or alias an internal IPv4
   { id: "V05", url: "http://[::ffff:127.0.0.1]/", ref: "CVE-2026-49857" },
@@ -138,7 +140,9 @@ export const ALWAYS_FORBIDDEN_IDS: readonly string[] = [
   "V24",
   "V29",
   "V35",
-  "V36"
+  "V36",
+  "V46",
+  "V47"
 ];
 
 describe("public SSRF test vectors: never allowed, even with SAFE_FETCH_ALLOW_LOCAL", () => {

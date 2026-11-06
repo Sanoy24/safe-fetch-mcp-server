@@ -26,6 +26,9 @@ this project follows [Semantic Versioning](https://semver.org/).
   `suspicious-metadata-removed`.
 - **Unsafe links and images:** `javascript:`, `data:` and similar links become plain text.
 - **Framing:** page text now sits between random per-response start and end markers.
+- **More addresses blocked:** the Azure platform address `168.63.129.16` and Oracle's legacy
+  metadata address `192.0.0.192` are now never allowed, and `192.88.99.0/24`, `3fff::/20` and the
+  rest of `2001::/23` are treated as non-public.
 
 ### Changed
 
@@ -38,6 +41,8 @@ this project follows [Semantic Versioning](https://semver.org/).
   500 look like a security refusal. It now returns the real status. Internal errors no longer say
   "Refused".
 - Paging could split an emoji in two.
+- A host with several addresses failed outright if the first was unreachable, for example an IPv6
+  answer on a network without IPv6. Every validated address is now tried, so pinning still holds.
 - `<meta charset>` and UTF-16 byte order marks are now honoured when the header names no charset.
 - YAML front matter no longer uses up `max_chars`. It's removed from the text and kept as metadata.
 
