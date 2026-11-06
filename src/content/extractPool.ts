@@ -11,19 +11,20 @@ import type { ExtractJob } from "./extractWorker.js";
  */
 const MAX_WORKERS = 4;
 const WORKER_MEMORY_MB = 512;
+const MAX_QUEUE_WAIT_MS = 30_000;
 
 interface PendingJob {
   readonly input: ExtractJob;
+  readonly budgetMs: number;
   readonly resolve: (value: ExtractedContent) => void;
   readonly reject: (err: Error) => void;
-  timer?: NodeJS.Timeout;
-  worker?: Worker;
-  detach?: () => void;
+  queueTimer?: NodeJS.Timeout;
 }
 
 const idle: Worker[] = [];
 const queue: PendingJob[] = [];
 let workerCount = 0;
+let busyCount = 0;
 
 // Workers need compiled JavaScript. Under vitest this module runs from src/, so it uses
 // dist/ (npm test builds first).
@@ -46,65 +47,90 @@ function discard(worker: Worker): void {
   void worker.terminate();
 }
 
-function pump(): void {
-  while (queue.length > 0) {
-    let worker = idle.pop();
-    if (!worker && workerCount < MAX_WORKERS) {
-      worker = new Worker(workerUrl(), {
-        resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB }
-      });
-      worker.unref(); // an idle worker must never keep the process alive
-      workerCount += 1;
+function startWorker(): void {
+  const worker = new Worker(workerUrl(), {
+    resourceLimits: { maxOldGenerationSizeMb: WORKER_MEMORY_MB }
+  });
+  worker.unref(); // an idle worker must never keep the process alive
+  workerCount += 1;
+
+  const onStartupError = (err: Error): void => {
+    worker.off("message", onReady);
+    discard(worker);
+    // A worker that can't start won't start on retry, so don't leave jobs waiting.
+    for (const job of queue.splice(0)) {
+      clearTimeout(job.queueTimer);
+      job.reject(limitError(`worker failed to start: ${err.message}`));
     }
-    if (!worker) return;
-    run(worker, queue.shift() as PendingJob);
+  };
+  const onReady = (): void => {
+    worker.off("error", onStartupError);
+    idle.push(worker);
+    pump();
+  };
+  worker.once("message", onReady);
+  worker.once("error", onStartupError);
+}
+
+function pump(): void {
+  while (queue.length > 0 && idle.length > 0) {
+    run(idle.pop() as Worker, queue.shift() as PendingJob);
+  }
+  // Start workers for jobs that no already-starting worker will take.
+  const starting = workerCount - idle.length - busyCount;
+  for (let i = starting; i < queue.length && workerCount < MAX_WORKERS; i += 1) {
+    startWorker();
   }
 }
 
 function run(worker: Worker, job: PendingJob): void {
-  job.worker = worker;
+  clearTimeout(job.queueTimer);
+  busyCount += 1;
+  // Remove only our own handlers: removeAllListeners() also strips the Worker's internal
+  // ones, and a reused worker then never delivers another message.
+  const detach = (): void => {
+    busyCount -= 1;
+    clearTimeout(timer);
+    worker.off("message", onMessage);
+    worker.off("error", onError);
+  };
   const onMessage = (result: ExtractedContent): void => {
-    job.detach?.();
+    detach();
     idle.push(worker);
     job.resolve(result);
     pump();
   };
   const onError = (err: Error): void => {
-    job.detach?.();
+    detach();
     discard(worker);
     job.reject(limitError(`worker failed: ${err.message}`));
     pump();
   };
-  // Remove only our own handlers: removeAllListeners() also strips the Worker's internal
-  // ones, and a reused worker then never delivers another message.
-  job.detach = (): void => {
-    clearTimeout(job.timer);
-    worker.off("message", onMessage);
-    worker.off("error", onError);
-  };
+  const timer = setTimeout(() => {
+    detach();
+    discard(worker);
+    job.reject(limitError(`processing exceeded ${job.budgetMs}ms`));
+    pump();
+  }, job.budgetMs);
   worker.on("message", onMessage);
   worker.on("error", onError);
   worker.postMessage(job.input);
 }
 
-/** Converts a fetched body off the main thread, rejecting once budgetMs has passed. */
+/**
+ * Converts a fetched body off the main thread. budgetMs is the time for this page once a
+ * ready worker has it; waiting for a free worker is capped separately.
+ */
 export function extractInWorker(
   input: ExtractJob,
   budgetMs: number
 ): Promise<ExtractedContent> {
   return new Promise((resolve, reject) => {
-    const job: PendingJob = { input, resolve, reject };
-    // The clock starts now, so time spent queued counts against the budget too.
-    job.timer = setTimeout(() => {
-      if (job.worker) {
-        job.detach?.();
-        discard(job.worker);
-      } else {
-        queue.splice(queue.indexOf(job), 1);
-      }
-      reject(limitError(`processing exceeded ${budgetMs}ms`));
-      pump();
-    }, budgetMs);
+    const job: PendingJob = { input, budgetMs, resolve, reject };
+    job.queueTimer = setTimeout(() => {
+      queue.splice(queue.indexOf(job), 1);
+      reject(limitError(`no worker became free within ${MAX_QUEUE_WAIT_MS}ms`));
+    }, MAX_QUEUE_WAIT_MS);
     queue.push(job);
     pump();
   });

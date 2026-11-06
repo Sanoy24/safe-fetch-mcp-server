@@ -1,6 +1,13 @@
 import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 import { baseType, decodeBody, htmlToMarkdown } from "./toMarkdown.js";
+import {
+  hasSmuggledText,
+  INJECTION_LIKE,
+  sanitizeMarkdown,
+  stripInvisible,
+  type ImageMode
+} from "./sanitize.js";
 
 /**
  * Turns a fetched body into markdown plus page metadata.
@@ -19,6 +26,7 @@ export type Extraction = "main" | "full" | "fallback-full" | "none";
 /** Signals for the agent about how to treat the result. */
 export const HINTS = [
   "suspicious-hidden-content-removed",
+  "suspicious-metadata-removed",
   "likely-requires-javascript"
 ] as const;
 export type Hint = (typeof HINTS)[number];
@@ -55,7 +63,7 @@ const MIN_CODE_BLOCKS_TO_CHECK = 3;
 // whitespace and cap the length so it can't smuggle a wall of injected text.
 function clean(value: string | null | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
-  const text = value
+  const text = stripInvisible(value)
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -81,6 +89,16 @@ function prune(metadata: PageMetadata): PageMetadata {
   return Object.fromEntries(
     Object.entries(metadata).filter(([, v]) => v !== undefined)
   ) as PageMetadata;
+}
+
+/** Metadata sits outside the content markers, so instruction-like values don't get through. */
+function screenMetadata(metadata: PageMetadata, hints: Set<Hint>): PageMetadata {
+  const kept = Object.entries(prune(metadata)).filter(([, value]) => {
+    if (!INJECTION_LIKE.test(value as string)) return true;
+    hints.add("suspicious-metadata-removed");
+    return false;
+  });
+  return Object.fromEntries(kept) as PageMetadata;
 }
 
 type Doc = ReturnType<typeof parseHTML>["document"];
@@ -113,9 +131,11 @@ function htmlMetadata(document: Doc, baseUrl: string | undefined): PageMetadata 
   };
 }
 
+const FRONT_MATTER = /^---\r?\n([\s\S]{0,4000}?)\r?\n---[ \t]*(?:\r?\n)+/;
+
 /** YAML front matter that server-rendered markdown (e.g. Cloudflare) may start with. */
 function frontMatterMetadata(markdown: string): PageMetadata {
-  const match = /^---\r?\n([\s\S]{0,4000}?)\r?\n---\r?\n/.exec(markdown);
+  const match = FRONT_MATTER.exec(markdown);
   if (!match?.[1]) return {};
   const fields = new Map<string, string>();
   for (const line of match[1].split(/\r?\n/)) {
@@ -134,41 +154,149 @@ function countCodeBlocks(html: string): number {
   return (html.match(/<pre[\s>]/gi) ?? []).length;
 }
 
-// Invisible characters used to hide or reorder text from human readers: zero-width
-// spaces/joiners, bidi overrides and isolates, word joiners, and the BOM.
-const INVISIBLE_CHARS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const HIDDEN_SELECTOR = '[hidden], [aria-hidden="true"], template, input[type="hidden"]';
+// Off-screen and zero-size tricks: common ways to hide text from people but not parsers.
+const FAR_OFFSCREEN_PX = -999;
+const SOFT_HIDDEN_MAX_SHARE = 0.5;
+const VISUALLY_HIDDEN_CLASSES = ".sr-only, .visually-hidden, .screen-reader-text";
+const RESPONSIVE_CLASS = /(?:^|\s)(?:\S+:\S+|d-\w+-\S+)(?:\s|$)/;
 
-function stripInvisible(text: string): string {
-  return text.replace(INVISIBLE_CHARS, "");
+function declarations(style: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const part of style.split(";")) {
+    const i = part.indexOf(":");
+    if (i > 0) {
+      map.set(
+        part.slice(0, i).trim().toLowerCase(),
+        part
+          .slice(i + 1)
+          .replace(/!important/i, "")
+          .trim()
+          .toLowerCase()
+      );
+    }
+  }
+  return map;
 }
 
-const HIDDEN_SELECTOR = '[hidden], [aria-hidden="true"], template, input[type="hidden"]';
-const HIDING_STYLE =
-  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important)?\s*(?:;|$)/i;
+const isZero = (value: string | undefined): boolean =>
+  value !== undefined && /^[-+]?0*\.?0+(?:[a-z%]+)?$/.test(value);
+const isFarOffscreen = (value: string | undefined): boolean =>
+  value !== undefined && Number.parseFloat(value) <= FAR_OFFSCREEN_PX;
 
-// Phrases typical of prompt injection. Ordinary pages hide plenty of text (menus,
-// screen-reader labels), so the hint only fires when hidden text looks like it's
-// addressed to an AI. It's a heuristic signal, not a filter: hidden content is
-// removed either way.
-const INJECTION_LIKE =
-  /\b(?:ignore|disregard|forget|override)\b[^.]{0,40}\b(?:previous|prior|above|earlier|all|system)\b[^.]{0,20}\b(?:instructions?|prompts?|rules|messages?)\b|\byou are now\b|\bsystem prompt\b|\b(?:new|updated|hidden) instructions?\b|\b(?:as an|you are an?) (?:ai|assistant|language model)\b|<\/?(?:system|assistant|instructions?)>|\b(?:reveal|send|email|exfiltrate|leak)\b[^.]{0,40}\b(?:api[ _-]?keys?|passwords?|secrets?|tokens?|credentials?)\b/i;
+/** Definite: the browser certainly won't show this. */
+function styleCertainlyHides(style: string): boolean {
+  const d = declarations(style);
+  return (
+    d.get("display") === "none" ||
+    d.get("visibility") === "hidden" ||
+    d.get("visibility") === "collapse"
+  );
+}
+
+/** Heuristic: very likely hidden, though some are used for fade-ins or similar effects. */
+function styleProbablyHides(style: string): boolean {
+  const d = declarations(style);
+  const positioned = d.get("position") === "absolute" || d.get("position") === "fixed";
+  const clipped = d.get("overflow") === "hidden";
+  const opacity = d.get("opacity");
+  return (
+    (opacity !== undefined && Number.parseFloat(opacity) <= 0.01) ||
+    isZero(d.get("font-size")) ||
+    d.get("color") === "transparent" ||
+    isFarOffscreen(d.get("text-indent")) ||
+    (positioned &&
+      (isFarOffscreen(d.get("left")) ||
+        isFarOffscreen(d.get("top")) ||
+        isFarOffscreen(d.get("right")) ||
+        isFarOffscreen(d.get("bottom")))) ||
+    (clipped &&
+      (isZero(d.get("height")) ||
+        isZero(d.get("width")) ||
+        isZero(d.get("max-height")) ||
+        isZero(d.get("max-width")))) ||
+    /^rect\(\s*0(?:px)?[\s,]+0(?:px)?[\s,]+0(?:px)?[\s,]+0(?:px)?\s*\)$/.test(
+      d.get("clip") ?? ""
+    ) ||
+    /^(?:inset\(\s*(?:50|100)%|circle\(\s*0)/.test(d.get("clip-path") ?? "") ||
+    /^scale\(\s*0\s*\)$/.test(d.get("transform") ?? "")
+  );
+}
+
+/**
+ * Selectors from the page's own <style> rules that hide content. Only top-level rules with
+ * simple class or id selectors: @media rules (print, small screens) and compound selectors
+ * depend on context a parser doesn't have.
+ */
+function hidingSelectors(document: Doc): string[] {
+  const selectors: string[] = [];
+  for (const el of [...document.querySelectorAll("style")]) {
+    const css = (el.textContent ?? "").replace(/\/\*[\s\S]*?\*\//g, "");
+    let depth = 0;
+    let topLevel = "";
+    for (const ch of css) {
+      if (ch === "{") depth += 1;
+      if (depth <= 1) topLevel += ch;
+      if (ch === "}") depth -= 1;
+    }
+    // Drop @-rule blocks, whose nested bodies were collapsed above.
+    const rules = topLevel.replace(/@[^{};]*(?:\{[^}]*\}|;)/g, "");
+    for (const rule of rules.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const body = rule[2] ?? "";
+      if (!styleCertainlyHides(body) && !styleProbablyHides(body)) continue;
+      for (const raw of (rule[1] ?? "").split(",")) {
+        const selector = raw.trim();
+        if (
+          /^[a-z][\w-]*$/i.test(selector) === false &&
+          /^(?:[a-z][\w-]*)?(?:[.#][\w-]+)+$/i.test(selector)
+        ) {
+          selectors.push(selector);
+        }
+      }
+    }
+  }
+  return selectors;
+}
 
 /**
  * Removes elements a human reader can't see (threat-model row 25). Returns true if any
- * removed text looked like instructions aimed at an AI.
+ * removed text looked like instructions aimed at an AI. Best effort: without a real
+ * browser some tricks (e.g. text the same colour as its background) can't be detected.
  */
 function removeHiddenElements(document: Doc): boolean {
-  const hidden = [
-    ...document.querySelectorAll(HIDDEN_SELECTOR),
-    ...[...document.querySelectorAll("[style]")].filter((el) =>
-      HIDING_STYLE.test(el.getAttribute("style") ?? "")
-    )
-  ];
   let suspicious = false;
-  for (const el of hidden) {
-    if (!el.isConnected) continue; // already removed with a hidden ancestor
+  const remove = (el: Doc["documentElement"]): void => {
+    if (!el.isConnected) return; // already removed with a hidden ancestor
     if (INJECTION_LIKE.test(el.textContent ?? "")) suspicious = true;
     el.remove();
+  };
+
+  const styled = [...document.querySelectorAll("[style]")];
+  const stylesheetRules = hidingSelectors(document);
+  for (const el of [...document.querySelectorAll("style")]) el.remove();
+
+  for (const el of [...document.querySelectorAll(HIDDEN_SELECTOR)]) remove(el);
+  for (const el of styled) {
+    if (styleCertainlyHides(el.getAttribute("style") ?? "")) remove(el);
+  }
+
+  // Heuristics can misfire (a page fading in from opacity 0 looks hidden), so they
+  // never get to remove most of a page.
+  const candidates = [
+    ...styled.filter((el) => styleProbablyHides(el.getAttribute("style") ?? "")),
+    ...[...document.querySelectorAll(VISUALLY_HIDDEN_CLASSES)],
+    ...[...document.querySelectorAll(".hidden, .d-none")].filter(
+      (el) => !RESPONSIVE_CLASS.test(el.getAttribute("class") ?? "")
+    ),
+    ...stylesheetRules.flatMap((selector) => [...document.querySelectorAll(selector)])
+  ].filter((el) => el.isConnected);
+  const pageChars = (contentRoot(document).textContent ?? "").length;
+  const candidateChars = candidates.reduce(
+    (n, el) => n + (el.textContent ?? "").length,
+    0
+  );
+  if (candidateChars <= pageChars * SOFT_HIDDEN_MAX_SHARE) {
+    for (const el of candidates) remove(el);
   }
   return suspicious;
 }
@@ -203,26 +331,49 @@ export function extractContent(
   body: Buffer,
   contentType: string,
   mode: ExtractMode,
-  baseUrl?: string
+  baseUrl?: string,
+  images: ImageMode = "alt"
 ): ExtractedContent {
   const decoded = decodeBody(body, contentType);
   const type = baseType(contentType);
+  const hints = new Set<Hint>();
+  if (hasSmuggledText(decoded)) hints.add("suspicious-hidden-content-removed");
 
-  if (type !== "text/html" && type !== "application/xhtml+xml") {
-    const metadata = type === "text/markdown" ? frontMatterMetadata(decoded) : {};
+  if (decoded.trim() === "") {
+    return { markdown: "", extraction: "none", metadata: {}, hints: [] };
+  }
+
+  if (type === "text/markdown") {
+    const metadata = screenMetadata(frontMatterMetadata(decoded), hints);
+    const { text, suspicious } = sanitizeMarkdown(
+      decoded.replace(FRONT_MATTER, ""),
+      images
+    );
+    if (suspicious) hints.add("suspicious-hidden-content-removed");
     return {
-      markdown: stripInvisible(decoded),
+      markdown: stripInvisible(text),
       extraction: "none",
-      metadata: prune(metadata),
-      hints: []
+      metadata,
+      hints: [...hints]
     };
   }
 
-  const { document } = parseHTML(decoded);
+  if (type !== "text/html" && type !== "application/xhtml+xml") {
+    return {
+      markdown: stripInvisible(decoded),
+      extraction: "none",
+      metadata: {},
+      hints: [...hints]
+    };
+  }
+
+  // linkedom needs a root element; fragments and bare text don't always have one.
+  const { document } = parseHTML(
+    /<html[\s>]/i.test(decoded) ? decoded : `<html><body>${decoded}</body></html>`
+  );
   const metadata = htmlMetadata(document, baseUrl);
-  const hints = new Set<Hint>();
   if (looksLikeJavaScriptShell(document)) hints.add("likely-requires-javascript");
-  for (const el of [...document.querySelectorAll("script, style, noscript")]) el.remove();
+  for (const el of [...document.querySelectorAll("script, noscript")]) el.remove();
   if (removeHiddenElements(document)) hints.add("suspicious-hidden-content-removed");
 
   // Everything below works from the cleaned DOM, so hidden content can't reach the
@@ -233,15 +384,16 @@ export function extractContent(
     extraction: Extraction,
     meta: PageMetadata
   ): ExtractedContent => {
+    const screened = screenMetadata(meta, hints);
     return {
       markdown: stripInvisible(markdown),
       extraction,
-      metadata: prune(meta),
+      metadata: screened,
       hints: [...hints]
     };
   };
   const full = (extraction: Extraction): ExtractedContent =>
-    finish(htmlToMarkdown(cleanedHtml), extraction, metadata);
+    finish(htmlToMarkdown(cleanedHtml, images), extraction, metadata);
 
   if (mode === "full") return full("full");
   if (document.querySelectorAll("*").length > MAX_ELEMENTS_TO_PARSE) {
@@ -276,7 +428,7 @@ export function extractContent(
     return full("fallback-full");
   }
 
-  let markdown = htmlToMarkdown(article.content);
+  let markdown = htmlToMarkdown(article.content, images);
   // Readability returns the title separately; restore it so the text stands alone.
   const title = clean(article.title);
   if (title && !markdown.trimStart().startsWith("#"))

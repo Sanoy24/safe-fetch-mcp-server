@@ -1,13 +1,47 @@
 import TurndownService from "turndown";
 import { parseHTML } from "linkedom";
+import { isSafeLink, renderImage, type ImageMode } from "./sanitize.js";
 
-const turndownService = new TurndownService({
-  headingStyle: "atx",
-  codeBlockStyle: "fenced"
-});
-// Turndown only skips *converting* unknown elements — it still emits their text
-// content. script/style/noscript text is never document content, so drop it.
-turndownService.remove(["script", "style", "noscript"]);
+interface ConverterNode {
+  readonly nodeName: string;
+  getAttribute(name: string): string | null;
+}
+
+function createConverter(images: ImageMode): TurndownService {
+  const service = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced"
+  });
+  // Turndown only skips *converting* unknown elements — it still emits their text
+  // content. script/style/noscript text is never document content, so drop it.
+  service.remove(["script", "style", "noscript"]);
+  // javascript:, data: and similar links become plain text (threat-model row 27).
+  service.addRule("unsafeLinks", {
+    filter: (node) => {
+      const el = node as unknown as ConverterNode;
+      const href = el.getAttribute("href");
+      return el.nodeName === "A" && href !== null && !isSafeLink(href);
+    },
+    replacement: (content) => content
+  });
+  service.addRule("images", {
+    filter: "img",
+    replacement: (_content, node) => {
+      const el = node as unknown as ConverterNode;
+      return renderImage(
+        el.getAttribute("alt") ?? "",
+        el.getAttribute("src") ?? "",
+        images
+      );
+    }
+  });
+  return service;
+}
+
+const converters: Record<ImageMode, TurndownService> = {
+  alt: createConverter("alt"),
+  keep: createConverter("keep")
+};
 
 const TEXTUAL_TYPES = new Set([
   "application/json",
@@ -36,12 +70,25 @@ function charsetOf(contentType: string): string | undefined {
   return /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType)?.[1];
 }
 
+/** The charset to use when the header names none: a byte order mark, then <meta> in HTML. */
+function sniffCharset(body: Buffer, contentType: string): string | undefined {
+  if (body[0] === 0xff && body[1] === 0xfe) return "utf-16le";
+  if (body[0] === 0xfe && body[1] === 0xff) return "utf-16be";
+  const base = baseType(contentType);
+  if (base !== "text/html" && base !== "application/xhtml+xml") return undefined;
+  const label = /<meta\b[^>]*?\bcharset\s*=\s*["']?\s*([\w.:-]+)/i.exec(
+    body.toString("latin1", 0, 1024)
+  )?.[1];
+  // Per the HTML spec, a <meta> claiming UTF-16 can't be true of a file readable as ASCII.
+  return label && /^utf-?16/i.test(label) ? "utf-8" : label;
+}
+
 /**
- * Decodes a body using the Content-Type charset, falling back to UTF-8 when the
- * charset is missing or unknown. Never throws: malformed bytes become U+FFFD.
+ * Decodes a body using the Content-Type charset, then a byte order mark or <meta charset>,
+ * falling back to UTF-8 when none is usable. Never throws: malformed bytes become U+FFFD.
  */
 export function decodeBody(body: Buffer, contentType: string): string {
-  const charset = charsetOf(contentType);
+  const charset = charsetOf(contentType) ?? sniffCharset(body, contentType);
   if (charset) {
     try {
       return new TextDecoder(charset).decode(body);
@@ -108,7 +155,8 @@ function blockPieces(node: HtmlNode, depth: number, pieces: string[]): void {
 }
 
 /** Converts an HTML string (a whole page or an extracted fragment) to markdown. */
-export function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string, images: ImageMode = "alt"): string {
+  const turndownService = converters[images];
   if (html.length < BATCH_MIN_CHARS) return turndownService.turndown(html);
 
   const isDocument = /<html[\s>]/i.test(html.slice(0, 2_000));
@@ -140,7 +188,7 @@ export function toMarkdown(body: Buffer, contentType: string): string {
   const text = decodeBody(body, contentType);
 
   if (base === "text/html" || base === "application/xhtml+xml") {
-    return turndownService.turndown(text);
+    return htmlToMarkdown(text);
   }
 
   return text;
