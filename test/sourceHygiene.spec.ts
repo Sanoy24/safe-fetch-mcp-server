@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 // "Trojan Source" guard (CVE-2021-42574): invisible and bidi-control characters can make
 // code read differently to a reviewer than it runs. Source must spell them as \uXXXX
 // escapes. This also catches tooling that silently turns escapes into the real characters.
-const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/;
+const INVISIBLE = new RegExp(
+  "[\\u00AD\\u061C\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\u{E0000}-\\u{E007F}]",
+  "u"
+);
 
 describe("source hygiene", () => {
   it("has no literal invisible or bidi-control characters in tracked code", () => {

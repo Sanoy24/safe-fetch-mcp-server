@@ -13,6 +13,33 @@ this project follows [Semantic Versioning](https://semver.org/).
   main thread, after `SAFE_FETCH_TIMEOUT_MS` had stopped applying. Conversion now runs in a
   worker thread with a hard time and memory limit, and large pages convert in batches. Over
   budget returns the new error code `PROCESSING_LIMIT`.
+- **Invisible text:** Unicode tag characters ("ASCII smuggling"), soft hyphens, U+061C and stray
+  variation selectors are now removed, everywhere including `format: "raw"` and page metadata.
+  Emoji sequences and joiners needed by Arabic-script and Indic text are now kept (they were
+  being damaged).
+- **Hidden elements:** also removes `font-size:0`, `opacity:0`, off-screen positioning,
+  zero-size clipping, simple page `<style>` rules and common visually-hidden classes. A safety
+  limit stops these heuristics removing most of a page. Comments and hidden HTML are removed
+  from server-rendered markdown, leaving code untouched. The docs no longer claim hidden text
+  is always removed: this is best effort.
+- **Metadata** is cleaned the same way; instruction-like values are dropped, with the new hint
+  `suspicious-metadata-removed`.
+- **Unsafe links and images:** `javascript:`, `data:` and similar links become plain text.
+- **Framing:** page text now sits between random per-response start and end markers.
+
+### Changed
+
+- **Images are replaced with their alt text by default** (`[Image: alt]`). Pass `images: "keep"`
+  for http(s) images as markdown.
+
+### Fixed
+
+- An empty HTML response returned `INTERNAL_ERROR` with a "Refused" message, making a plain HTTP
+  500 look like a security refusal. It now returns the real status. Internal errors no longer say
+  "Refused".
+- Paging could split an emoji in two.
+- `<meta charset>` and UTF-16 byte order marks are now honoured when the header names no charset.
+- YAML front matter no longer uses up `max_chars`. It's removed from the text and kept as metadata.
 
 ## [0.5.0] - 2026-10-31
 
