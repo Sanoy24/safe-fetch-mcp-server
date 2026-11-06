@@ -13,13 +13,12 @@ export class ResolutionError extends GuardError {}
 
 export interface PinnedTarget {
   readonly hostname: string;
-  readonly pinnedIp: string;
-  readonly family: 4 | 6;
+  /** Every resolved address, all validated, in resolver order. */
+  readonly addresses: readonly LookupAddress[];
   /**
-   * A dns.lookup-compatible function that always resolves to the single,
-   * already-validated pinned IP — passed as the `lookup` option to http(s).request
-   * so the socket connects to exactly the address we validated. This is what
-   * defeats DNS rebinding: there is no second resolution to race.
+   * A dns.lookup-compatible function that only ever returns those validated addresses,
+   * passed as the `lookup` option to http(s).request. This is what defeats DNS
+   * rebinding: there is no second resolution to race.
    */
   readonly lookup: LookupFunction;
 }
@@ -31,7 +30,7 @@ export const systemResolver: Resolver = (hostname) => dnsLookup(hostname, { all:
 
 /**
  * Resolves `hostname` once, validates every returned address, and returns a target
- * pinned to one validated IP. Rejects if ANY resolved address is blocked (per the
+ * pinned to those addresses. Rejects if ANY resolved address is blocked (per the
  * security skill's control flow) — a host that resolves to a mix of public and
  * private addresses is refused outright rather than trusting resolver ordering.
  */
@@ -85,15 +84,13 @@ export async function resolveAndPin(
     }
   }
 
-  const chosen = addresses[0];
-  if (!chosen) {
+  const [first] = addresses;
+  if (!first) {
     throw new ResolutionError(
       "DNS_RESOLUTION_FAILED",
       `Refused: host "${hostname}" resolved to no addresses.`
     );
   }
-  const pinnedIp = chosen.address;
-  const family = chosen.family as 4 | 6;
 
   const lookup: LookupFunction = (
     _host: string,
@@ -105,15 +102,16 @@ export async function resolveAndPin(
     ) => void
   ) => {
     // Node's HTTP client requests { all: true } when Happy Eyeballs
-    // (autoSelectFamily) is active and expects an array back in that case — a bare
-    // string is silently misread, surfacing as "Invalid IP address: undefined"
-    // deep in the TLS/socket layer. Always match the shape the caller asked for.
+    // (autoSelectFamily) is active and expects an array back in that case. A bare
+    // string is silently misread, surfacing as "Invalid IP address: undefined" deep in
+    // the TLS/socket layer. Offering every address lets it move on from one that's
+    // unreachable, such as an IPv6 answer on a network without IPv6.
     if (options.all) {
-      callback(null, [{ address: pinnedIp, family }]);
+      callback(null, [...addresses]);
     } else {
-      callback(null, pinnedIp, family);
+      callback(null, first.address, first.family);
     }
   };
 
-  return { hostname, pinnedIp, family, lookup };
+  return { hostname, addresses, lookup };
 }

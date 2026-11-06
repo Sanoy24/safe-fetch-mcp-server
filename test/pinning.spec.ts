@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { safeFetch, ResolutionError } from "../src/security/index.js";
-import type { Resolver } from "../src/security/resolveAndPin.js";
+import { resolveAndPin, type Resolver } from "../src/security/resolveAndPin.js";
 import type { SafeFetchConfig } from "../src/config.js";
 
 // Rows 7 (DNS rebinding) and the "validate EVERY resolved address" rule, proven with
@@ -92,5 +92,64 @@ describe("DNS resolution and connection pinning", () => {
     await expect(
       safeFetch("http://empty.test/", testConfig(), { resolve: emptyResolver })
     ).rejects.toThrow(ResolutionError);
+  });
+});
+
+describe("connecting when a host has several validated addresses", () => {
+  let server: http.Server | undefined;
+
+  afterEach(async () => {
+    if (!server) return;
+    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    server = undefined;
+  });
+
+  it("tries the next validated address when the first is unreachable", async () => {
+    server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("reached");
+    });
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as AddressInfo).port;
+
+    // Nothing listens on 127.0.0.2, like an IPv6 answer on a network without IPv6.
+    const resolver: Resolver = async () => [
+      { address: "127.0.0.2", family: 4 },
+      { address: "127.0.0.1", family: 4 }
+    ];
+
+    const result = await safeFetch(
+      `http://two-addresses.test:${port}/`,
+      testConfig({ allowLocal: true }),
+      { resolve: resolver }
+    );
+
+    expect(result.status).toBe(200);
+    expect(result.body.toString("utf-8")).toBe("reached");
+  });
+
+  it("offers the connection only the validated addresses, in resolver order", async () => {
+    const answers = [
+      { address: "2606:4700:4700::1111", family: 6 },
+      { address: "1.1.1.1", family: 4 }
+    ];
+    const pinned = await resolveAndPin("multi.test", false, async () => answers);
+
+    const offered = await new Promise<unknown>((resolve, reject) => {
+      pinned.lookup("attacker-controlled.test", { all: true }, (err, addresses) => {
+        if (err) reject(err);
+        else resolve(addresses);
+      });
+    });
+    expect(offered).toEqual(answers);
+
+    // A caller asking for one address gets the first, with its own family.
+    const single = await new Promise<unknown[]>((resolve, reject) => {
+      pinned.lookup("attacker-controlled.test", {}, (err, address, family) => {
+        if (err) reject(err);
+        else resolve([address, family]);
+      });
+    });
+    expect(single).toEqual(["2606:4700:4700::1111", 6]);
   });
 });

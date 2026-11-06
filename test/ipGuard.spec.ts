@@ -93,6 +93,20 @@ describe("isAlwaysBlockedIp (never bypassable, even with ALLOW_LOCAL=true)", () 
     expect(isAlwaysBlockedIp("::ffff:100.100.100.200")).toBe(true);
   });
 
+  it("blocks the Azure platform address (168.63.129.16), though it looks public", () => {
+    expect(isAlwaysBlockedIp("168.63.129.16")).toBe(true);
+    expect(isAlwaysBlockedIp("::ffff:168.63.129.16")).toBe(true);
+    expect(isAlwaysBlockedIp("64:ff9b::a83f:8110")).toBe(true);
+    expect(isBlockedIp("168.63.129.15")).toBe(false);
+    expect(isBlockedIp("168.63.129.17")).toBe(false);
+  });
+
+  it("blocks Oracle's legacy metadata address (192.0.0.192), even with local access", () => {
+    expect(isAlwaysBlockedIp("192.0.0.192")).toBe(true);
+    expect(isAlwaysBlockedIp("192.0.0.1")).toBe(false);
+    expect(isBlockedIp("192.0.0.1")).toBe(true);
+  });
+
   it("blocks AWS IPv6 IMDS (fd00:ec2::254), even though it sits inside ULA", () => {
     expect(isAlwaysBlockedIp("fd00:ec2::254")).toBe(true);
     // Neighbouring ULA addresses stay in the bypassable tier.
@@ -152,5 +166,18 @@ describe("ipGuard — special-purpose ranges (IANA registries)", () => {
     expect(isBlockedIp("2001::1")).toBe(true); // Teredo
     expect(isBlockedIp("4000::1")).toBe(true); // unassigned, outside 2000::/3
     expect(isBlockedIp("2606:4700:4700::1111")).toBe(false);
+  });
+
+  it("blocks special-purpose ranges that sit inside otherwise public space", () => {
+    expect(isBlockedIp("192.88.99.1")).toBe(true); // deprecated 6to4 relay anycast
+    expect(isBlockedIp("192.88.100.1")).toBe(false);
+    expect(isBlockedIp("3fff::1")).toBe(true); // documentation (RFC 9637)
+    expect(isBlockedIp("3fff:fff:ffff::1")).toBe(true); // last of 3fff::/20
+    expect(isBlockedIp("3fff:1000::1")).toBe(false); // first address past it
+    expect(isBlockedIp("2001:2::1")).toBe(true); // benchmarking, in 2001::/23
+    expect(isBlockedIp("2001:20::1")).toBe(true); // ORCHIDv2, in 2001::/23
+    expect(isBlockedIp("2001:1ff:ffff::1")).toBe(true); // last of 2001::/23
+    expect(isBlockedIp("2001:200::1")).toBe(false); // first address past it
+    expect(isBlockedIp("2001:4860:4860::8888")).toBe(false); // a real public resolver
   });
 });

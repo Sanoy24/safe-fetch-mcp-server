@@ -126,6 +126,8 @@ export type IpClass = "public" | "private" | "forbidden";
 const FORBIDDEN_IPV4_CIDRS: Cidr4[] = [
   parseCidr4("169.254.0.0/16"), // row 1: link-local / AWS, GCP, Azure, OCI metadata
   parseCidr4("100.100.100.200/32"), // row 1: Alibaba Cloud metadata
+  parseCidr4("168.63.129.16/32"), // row 1: Azure platform services (looks public)
+  parseCidr4("192.0.0.192/32"), // row 1: Oracle legacy metadata
   parseCidr4("224.0.0.0/4"), // multicast
   parseCidr4("240.0.0.0/4") // reserved, includes broadcast 255.255.255.255
 ];
@@ -141,6 +143,7 @@ const PRIVATE_IPV4_CIDRS: Cidr4[] = [
   parseCidr4("100.64.0.0/10"), // CGNAT / shared address space (often internal on clouds)
   parseCidr4("192.0.0.0/24"), // IETF protocol assignments
   parseCidr4("192.0.2.0/24"), // TEST-NET-1
+  parseCidr4("192.88.99.0/24"), // deprecated 6to4 relay anycast
   parseCidr4("198.18.0.0/15"), // benchmarking
   parseCidr4("198.51.100.0/24"), // TEST-NET-2
   parseCidr4("203.0.113.0/24") // TEST-NET-3
@@ -157,8 +160,9 @@ const PRIVATE_IPV6_CIDRS: Cidr6[] = [
   parseCidr6("fc00::/7"), // row 5: unique local address (ULA)
   parseCidr6("::/128"), // unspecified address, analog of 0.0.0.0
   // Inside 2000::/3 but not globally reachable:
-  parseCidr6("2001::/32"), // Teredo (embeds an obfuscated IPv4)
-  parseCidr6("2001:db8::/32") // documentation
+  parseCidr6("2001::/23"), // IETF protocol assignments, including Teredo and benchmarking
+  parseCidr6("2001:db8::/32"), // documentation
+  parseCidr6("3fff::/20") // documentation (RFC 9637)
 ];
 
 const GLOBAL_UNICAST_IPV6: Cidr6 = parseCidr6("2000::/3");

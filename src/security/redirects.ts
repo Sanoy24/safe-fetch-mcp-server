@@ -1,6 +1,6 @@
 import * as http from "node:http";
 import * as https from "node:https";
-import { isIP } from "node:net";
+import { isIP, type TcpSocketConnectOpts } from "node:net";
 import * as zlib from "node:zlib";
 import { Transform, type Readable, type TransformCallback } from "node:stream";
 import type { SafeFetchConfig } from "../config.js";
@@ -138,6 +138,22 @@ function untilAborted<T>(
   });
 }
 
+// Try each validated address in turn. Node's default of 250ms per attempt gives up on
+// addresses that are merely slow on high-latency links; the total deadline still applies.
+const CONNECT_OPTIONS: Pick<
+  TcpSocketConnectOpts,
+  "autoSelectFamily" | "autoSelectFamilyAttemptTimeout"
+> = { autoSelectFamily: true, autoSelectFamilyAttemptTimeout: 1_000 };
+
+// When every address fails, Node reports an AggregateError with an empty message.
+function connectFailureCause(err: Error): string {
+  return err instanceof AggregateError
+    ? err.errors
+        .map((e: unknown) => (e instanceof Error ? e.message : String(e)))
+        .join("; ")
+    : err.message;
+}
+
 function performPinnedRequest(
   url: URL,
   pinned: PinnedTarget,
@@ -170,6 +186,7 @@ function performPinnedRequest(
         host: pinned.hostname,
         ...(servername !== undefined ? { servername } : {}),
         lookup: pinned.lookup,
+        ...CONNECT_OPTIONS,
         agent: false,
         port,
         path: `${url.pathname}${url.search}`,
@@ -284,7 +301,7 @@ function performPinnedRequest(
               "CONNECTION_FAILED",
               `Refused: could not connect to "${pinned.hostname}".`,
               {
-                cause: err.message
+                cause: connectFailureCause(err)
               }
             )
       );
