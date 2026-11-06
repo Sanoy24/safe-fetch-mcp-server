@@ -62,6 +62,19 @@ describe("compat mode off (default)", () => {
     expect(client.getServerCapabilities()?.prompts).toBeUndefined();
     await client.close();
   });
+
+  it("can't call the hidden fetch tool directly either", async () => {
+    const client = await connect(testConfig());
+    const outcome = await client
+      .callTool({ name: "fetch", arguments: { url: "https://example.com/" } })
+      .then(
+        (result) => JSON.stringify(result),
+        (err: unknown) => String(err)
+      );
+    expect(outcome).toMatch(/not found/i);
+    expect(outcome).not.toContain("external-content");
+    await client.close();
+  });
 });
 
 describe("compat mode on (SAFE_FETCH_COMPAT_TOOL / --compat)", () => {

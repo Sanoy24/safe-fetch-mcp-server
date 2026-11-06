@@ -30,77 +30,60 @@ in [`threat-model.md`](threat-model.md#threat-matrix).
 
 ## External scanner validation
 
-_Run against v0.1.0 (August 2026). Re-run before quoting these numbers for a later release._
+_Run on 6 November 2026 with [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit) 0.6.31
+(440 rules), on a clean checkout of v0.6.0 and then of the fix below. Re-run before quoting these
+numbers for a later release._
 
-Validated against [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit)
-(276 rules, MIT-licensed, runs fully offline — no code or scan results ever left
-this machine), run via `uvx agent-audit-kit scan .` with no persistent install.
+The scan runs offline, and clean checkouts keep local, untracked files out of the result.
 
-**Result: 13 findings → 2, zero critical/high remaining.**
+| Run                 | Critical | High | Medium | Low | Total reported |
+| ------------------- | -------- | ---- | ------ | --- | -------------- |
+| v0.6.0              | 1        | 5    | 6      | 5   | 17             |
+| After the fix below | 0        | 5    | 6      | 5   | 16             |
 
-| Run   | Critical | High | Medium | Low | Total |
-| ----- | -------- | ---- | ------ | --- | ----- |
-| First | 2        | 6    | 4      | 1   | 13    |
-| Final | 0        | 0    | 1      | 1   | 2     |
+**The result isn't clean: the five remaining highs are still reported.** Each was checked against the
+code and is a false positive. They're listed here rather than excluded in the config, because an
+exclusion would also hide a real finding from the same rule later.
 
-Every finding was individually triaged against the scanner's own rule source
-(not just its message text) before being fixed, excluded, or accepted — see
-[`.agent-audit-kit.yml`](../.agent-audit-kit.yml) for the documented risk acceptance.
+### Fixed: a real vulnerability
 
-**Fixed:**
+**AAK-RUNTIME-ADV-001 (critical): Node's Brotli decoder (CVE-2026-111497).** Confirmed in Node's
+release notes, which rate it High. This server decompresses what sites send, so a hostile page could
+reach the out-of-bounds write on an unpatched Node, and `engines` allowed unpatched versions. Now, on
+an affected Node, the server neither offers nor decodes Brotli and warns at startup, and `engines`
+requires a patched release. See threat-model row 33.
 
-- **AAK-DNS-REBIND-001 (critical)** — the rule pattern-matches for literal tokens
-  (`allowedHosts:`, `TrustedHostMiddleware`, ...) in project source and didn't
-  recognize the SDK's newer `createMcpExpressApp()` helper, which was already
-  providing Host-header protection implicitly. Fixed for real, not just for the
-  scanner: `httpApp.ts` now passes `allowedHosts` **explicitly**, which is also
-  strictly more robust than the implicit behavior (protection no longer silently
-  disables if `HOST` is ever set to something other than the localhost default).
-- **AAK-DNS-REBIND-002 (high)** — `@modelcontextprotocol/sdk` was declared as
-  `^1.0.0` (the DNS-rebinding fix landed in 1.21.1; 1.30.0 was actually installed,
-  but the declared range didn't guarantee that). Tightened to `^1.30.0`.
-- **AAK-MCP-018 (medium × 3)** — no rate limiting on the HTTP transport. Added
-  `express-rate-limit` (60 req/min per IP by default, configurable), with a
-  regression test (`test/httpTransport.spec.ts`) proving a 429 on the 3rd request
-  over a 2-request limit.
-- **AAK-OAUTH-3P-001 (medium)** — informational nudge to pin and audit the SDK
-  dependency; addressed by the same version tightening above.
+### False positives (high)
 
-**Documented risk acceptance** (`.agent-audit-kit.yml`, `accepts_stdio_risk`):
+| Finding                                     | Where                                                | Why it doesn't apply                                                                                                                                         |
+| ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AAK-SECRET-004, high-entropy secret         | `src/config.ts`                                      | The match is the variable name `httpToken`. The value comes from `SAFE_FETCH_HTTP_TOKEN` at runtime, and no secret is in the repo                            |
+| AAK-MCP-014, token in a URL (twice)         | `test/auditLog.spec.ts`, `test/toolContract.spec.ts` | Test fixtures proving that query values are redacted from the audit log. The server's token is a header only                                                 |
+| AAK-SSRF-002, loopback reachable            | `test/httpHardening.spec.ts`                         | A test connecting to its own local fixture. The tool's guard refuses loopback unless `SAFE_FETCH_ALLOW_LOCAL` is set, as `test/vectors.spec.ts` covers       |
+| AAK-MCP-TOOLGATE-ASYMMETRY-001, hidden tool | `test/compat.spec.ts`                                | The optional `fetch` tool isn't registered at all when off, so there's nothing to call. `test/compat.spec.ts` checks that a direct call fails with not found |
 
-- **AAK-ANTHROPIC-SDK-001 (high)** — targets MCP servers that build shell
-  commands/argv from tool input without sanitizing them. This server has no such
-  surface: no `child_process`/`execFile`/`spawn`/`exec` anywhere in `src/`.
-  `fetch_url`'s only side effect is an HTTP(S) fetch through the hardened
-  `security/` guard. Verified, not assumed — see the justification in the config
-  file.
+### Medium and low
 
-**Excluded as false positives** (`.agent-audit-kit.yml`, `exclude-rules`):
+| Finding                                         | Status         | Reason                                                                                                                                          |
+| ----------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| AAK-MCP-005, AAK-MCP-007, npx without a version | Accepted       | The example config uses the install method most clients document. Pin `safe-fetch-mcp-server@x.y.z` if you want updates to be a deliberate step |
+| AAK-MCP-ATTEST-001, no attestation              | Accepted       | Concerns the host's server admission. npm provenance is published for each release                                                              |
+| AAK-COMPOSE-003, skill capabilities             | Accepted       | The skill tells an agent how to use this server's tool. It has no scripts of its own                                                            |
+| AAK-OAUTH-3P-001, depends on an MCP SDK         | Accepted       | Fires for any MCP project. This project uses no OAuth                                                                                           |
+| AAK-OAUTH-008, no OAuth discovery (twice)       | Accepted       | HTTP mode has a static bearer token, not OAuth, as the threat model states                                                                      |
+| AAK-SUPPLY-005, 279 lockfile entries            | Accepted       | Most are development tools. The limit is the scanner's own threshold of 200                                                                     |
+| AAK-STARTUP-HOOK-NPM-INSTALL-001, fsevents      | Accepted       | An optional, development-only, macOS-only package. Nothing with an install script is in the published dependencies                              |
+| AAK-MCP-018, no rate limit                      | False positive | A test file. The limit is in `src/httpApp.ts`, and `test/httpTransport.spec.ts` covers it                                                       |
+| AAK-MCP-TOOLS-LIST-UNBOUNDED-001                | False positive | The smoke test reading the tool list of the package it just built                                                                               |
 
-- **AAK-AGENT-002 / AAK-AGENT-003 (high × 3)** — keyword matches against
-  `CLAUDE.md`'s own defensive security documentation: the string
-  `169.254.169.254` (from test-writing guidance telling contributors to prove
-  that exact address is refused) and the word "bypassed" (from a sentence
-  describing the 2026 CVE this project's single-fetch-path design defends
-  against). Removing that language to satisfy a keyword matcher would make the
-  documentation worse, not better. That file has since left the repository, so the
-  exclusion is gone from the config too.
+### Reproduce
 
-**Remaining, accepted as-is:**
+```bash
+git clone https://github.com/Sanoy24/safe-fetch-mcp-server.git && cd safe-fetch-mcp-server
+uvx agent-audit-kit scan . --config .agent-audit-kit.yml --format json -o result.json
+```
 
-- **AAK-SUPPLY-005 (low)** — 333 lockfile entries exceeds the tool's 200
-  threshold. Normal baseline for a modern TS project with eslint +
-  typescript-eslint + vitest + express in the dev toolchain; not remediable
-  without gutting the toolchain.
-- **AAK-OAUTH-3P-001 (medium)** — persists as a generic informational nudge that
-  fires for any repo depending on the MCP SDK at all; no OAuth is used anywhere
-  in this project.
-- Two rate-limiting false triggers on `src/index.ts` and `src/server.ts`
-  (per-file keyword heuristic, doesn't see cross-file protection) were closed
-  with accurate one-line comments pointing to where the real rate limiter lives
-  (`httpApp.ts`) — not scanner-gaming, genuinely useful context either way.
+On Windows, set `PYTHONUTF8=1` first if the console reports a `charmap` error.
 
-Reproduce: `uvx agent-audit-kit scan . --config .agent-audit-kit.yml --score --owasp-report`
-(note: `--score`/`--owasp-report` may crash on Windows consoles with a
-`'charmap' codec` error when rendering certain symbols — use `--format json -o <file>`
-if that happens; the scan itself still completes and writes correctly).
+An earlier scan of v0.1.0, with 276 rules, went from 13 findings to 2 after fixes. Its details are in
+this file's git history.

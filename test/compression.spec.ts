@@ -16,6 +16,7 @@ function testConfig(overrides: Partial<SafeFetchConfig> = {}): SafeFetchConfig {
     maxBytes: 1_000_000,
     timeoutMs: 5_000,
     maxRedirects: 5,
+    brotli: true, // these exercise decoding itself; runtime.spec.ts covers the check
     ...overrides
   };
 }

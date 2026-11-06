@@ -431,7 +431,7 @@ npm run start:http     # Streamable HTTP on 127.0.0.1:3000/mcp
 npm run inspector      # MCP Inspector for manual protocol checks
 ```
 
-Requires Node 22+. See [`CONTRIBUTING.md`](CONTRIBUTING.md). The one rule that
+Requires Node 22.23.4+, 24.22.1+ or 26.12.1+. See [`CONTRIBUTING.md`](CONTRIBUTING.md). The one rule that
 matters most: every outbound request goes through the single security guard, no
 exceptions.
 

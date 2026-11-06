@@ -8,6 +8,7 @@ import { effectivePort, parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
 import { GuardError } from "./errors.js";
 import { acquireSlot } from "./limiter.js";
+import { hasPatchedBrotli } from "./runtime.js";
 
 export class SafeFetchError extends GuardError {}
 
@@ -74,7 +75,9 @@ const ACCEPT =
 // Compression saves bandwidth; the byte cap is enforced on the DECOMPRESSED stream, so
 // a decompression bomb stops at SAFE_FETCH_MAX_BYTES (threat-model row 23). zstd is
 // left out because not every supported Node version can decode it.
-const ACCEPT_ENCODING = "gzip, br, deflate";
+function brotliAllowed(cfg: SafeFetchConfig): boolean {
+  return cfg.brotli ?? hasPatchedBrotli(process.versions.node);
+}
 
 /**
  * "deflate" is zlib-wrapped per the spec, but some servers send raw deflate. Look at the
@@ -104,11 +107,16 @@ function createDeflateDecoder(): Transform {
 }
 
 /** A decoder for the response's Content-Encoding, null for none, or undefined if unsupported. */
-function decoderFor(contentEncoding: string | undefined): Transform | null | undefined {
+function decoderFor(
+  contentEncoding: string | undefined,
+  cfg: SafeFetchConfig
+): Transform | null | undefined {
   const encoding = (contentEncoding ?? "").trim().toLowerCase();
   if (encoding === "" || encoding === "identity") return null;
   if (encoding === "gzip" || encoding === "x-gzip") return zlib.createGunzip();
-  if (encoding === "br") return zlib.createBrotliDecompress();
+  // Not offering Brotli isn't enough: a hostile site can send it anyway.
+  if (encoding === "br")
+    return brotliAllowed(cfg) ? zlib.createBrotliDecompress() : undefined;
   if (encoding === "deflate") return createDeflateDecoder();
   return undefined;
 }
@@ -226,7 +234,7 @@ function performPinnedRequest(
           Host: url.host,
           "User-Agent": cfg.userAgent ?? DEFAULT_USER_AGENT,
           Accept: ACCEPT,
-          "Accept-Encoding": ACCEPT_ENCODING,
+          "Accept-Encoding": brotliAllowed(cfg) ? "gzip, br, deflate" : "gzip, deflate",
           ...extraHeaders
         }
       },
@@ -236,7 +244,7 @@ function performPinnedRequest(
         const chunks: Buffer[] = [];
         let received = 0;
 
-        const decoder = decoderFor(firstHeader(res.headers["content-encoding"]));
+        const decoder = decoderFor(firstHeader(res.headers["content-encoding"]), cfg);
         if (decoder === undefined) {
           settleReject(
             new SafeFetchError(
