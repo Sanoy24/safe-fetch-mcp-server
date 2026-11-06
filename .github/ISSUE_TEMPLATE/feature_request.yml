@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement. Read "Things NOT to do" in CLAUDE.md first.
+description: Suggest an improvement. Read "Out of scope" in CONTRIBUTING.md first.
 labels: [enhancement]
 body:
   - type: textarea

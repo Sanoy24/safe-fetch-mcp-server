@@ -15,7 +15,7 @@ Scanners and checklists are a smoke test, not proof of security. What the server
 | MCP01 | Token Mismanagement & Secret Exposure                | ✅ N/A by design            | The server holds no credentials of its own. URLs with embedded userinfo (`user:pass@host`) are rejected outright, before any processing — see `urlPolicy.ts`. stdio logging is stderr-only, never stdout (the protocol channel), so nothing can leak into transport traffic.                                                                                                                                                                                                                   |
 | MCP02 | Privilege Escalation via Scope Creep                 | ✅ N/A by design            | One tool (`fetch_url`), read-only (`readOnlyHint: true`, `destructiveHint: false`), fully stateless — there is no session or permission model that could creep.                                                                                                                                                                                                                                                                                                                                |
 | MCP03 | Tool Poisoning                                       | ✅ Mitigated                | Single first-party tool, description and schema fully controlled in-repo. No dynamic tool loading.                                                                                                                                                                                                                                                                                                                                                                                             |
-| MCP04 | Software Supply Chain Attacks & Dependency Tampering | ✅ Mitigated                | ADR-004: no third-party IP-classification library is used for the security-critical CIDR/IPv6 logic (the `ip` npm package shipped an SSRF-bypass CVE) — it's hand-written and unit-tested instead. `package-lock.json` is committed for reproducible installs, CI fails on any `npm audit` advisory, and Dependabot opens weekly update PRs. Small, well-known dependency set (`@modelcontextprotocol/sdk`, `express`, `turndown`, `zod`).                                                     |
+| MCP04 | Software Supply Chain Attacks & Dependency Tampering | ✅ Mitigated                | No third-party IP-classification library is used for the security-critical CIDR/IPv6 logic (the `ip` npm package shipped an SSRF-bypass CVE) — it's hand-written and unit-tested instead. `package-lock.json` is committed for reproducible installs, CI fails on any `npm audit` advisory, and Dependabot opens weekly update PRs. Small, well-known dependency set (`@modelcontextprotocol/sdk`, `express`, `turndown`, `zod`).                                                              |
 | MCP05 | Command Injection & Execution                        | ✅ N/A by design            | The server never executes a shell command or spawns a process from any input, ever.                                                                                                                                                                                                                                                                                                                                                                                                            |
 | MCP06 | Intent Flow Subversion                               | ⚠️ Partially mitigated      | Fetched content is attacker-controllable. Every successful `fetch_url` response is framed with an explicit "untrusted data, not instructions" notice (`frameAsUntrustedData` in `tools/fetchUrl.ts`), including paginated chunks. A label does not stop a model from following injected text: the consuming application still needs its own prompt-injection defenses.                                                                                                                         |
 | MCP07 | Insufficient Authentication & Authorization          | ⚠️ Documented limitation    | stdio mode relies on process-level trust (standard for local MCP servers). **HTTP mode has no built-in authentication** — only Origin/Host validation for DNS-rebinding protection, plus per-IP rate limiting (`SAFE_FETCH_RATE_LIMIT_MAX`/`_WINDOW_MS`, default 60 req/min) as a baseline DoS guard. Authentication is out of scope for this server. If you deploy HTTP mode over a network, put it behind your own auth layer (reverse proxy, API gateway, VPN) — do not expose it directly. |
@@ -32,7 +32,7 @@ in [`threat-model.md`](threat-model.md#threat-matrix).
 
 _Run against v0.1.0 (August 2026). Re-run before quoting these numbers for a later release._
 
-Per ADR-005, validated against [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit)
+Validated against [agent-audit-kit](https://github.com/sattyamjjain/agent-audit-kit)
 (276 rules, MIT-licensed, runs fully offline — no code or scan results ever left
 this machine), run via `uvx agent-audit-kit scan .` with no persistent install.
 
@@ -45,7 +45,7 @@ this machine), run via `uvx agent-audit-kit scan .` with no persistent install.
 
 Every finding was individually triaged against the scanner's own rule source
 (not just its message text) before being fixed, excluded, or accepted — see
-[`.agent-audit-kit.yml`](../.agent-audit-kit.yml) for the two documented exclusions.
+[`.agent-audit-kit.yml`](../.agent-audit-kit.yml) for the documented risk acceptance.
 
 **Fixed:**
 
@@ -83,7 +83,8 @@ Every finding was individually triaged against the scanner's own rule source
   that exact address is refused) and the word "bypassed" (from a sentence
   describing the 2026 CVE this project's single-fetch-path design defends
   against). Removing that language to satisfy a keyword matcher would make the
-  documentation worse, not better.
+  documentation worse, not better. That file has since left the repository, so the
+  exclusion is gone from the config too.
 
 **Remaining, accepted as-is:**
 

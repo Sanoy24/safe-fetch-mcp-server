@@ -1,7 +1,7 @@
 import { isIPv4, isIPv6 } from "node:net";
 
 /**
- * No third-party IP-classification library is used here (ADR-004: the `ip` npm
+ * No third-party IP-classification library is used here (the `ip` npm
  * package shipped an SSRF-bypass CVE). CIDR ranges and IPv6 parsing are implemented
  * directly against explicit ranges and covered by regression tests.
  */
