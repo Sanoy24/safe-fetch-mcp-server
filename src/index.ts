@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import type { Server } from "node:http";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createServer } from "./server.js";
 import {
   applyCompatFlags,
@@ -13,10 +13,11 @@ import { createHttpApp } from "./httpApp.js";
 
 // stdout is reserved for MCP protocol traffic in stdio mode; log only to stderr.
 
-async function startStdio(): Promise<void> {
-  const server = createServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+function startStdio(): void {
+  // Serves both protocol eras: the client's first message picks one for the connection.
+  serveStdio(() => createServer(), {
+    onerror: (err) => console.error("stdio transport error:", err.message)
+  });
   console.error("safe-fetch-mcp-server running on stdio");
 }
 
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
   if (wantsHttp) {
     shutDownOnSignal(await startHttp());
   } else {
-    await startStdio();
+    startStdio();
   }
 }
 

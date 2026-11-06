@@ -34,7 +34,18 @@ try {
     run(["pack", "--json", "--pack-destination", work], root)
   );
   writeFileSync(join(work, "package.json"), '{ "name": "smoke", "private": true }');
-  run(["install", "--no-audit", "--no-fund", join(work, filename)], work);
+  // The client isn't a dependency of the package, so the test installs it alongside.
+  const clientVersion = pkg.devDependencies["@modelcontextprotocol/client"];
+  run(
+    [
+      "install",
+      "--no-audit",
+      "--no-fund",
+      join(work, filename),
+      `@modelcontextprotocol/client@${clientVersion}`
+    ],
+    work
+  );
 
   const installed = join(work, "node_modules", pkg.name);
   const binPath = join(installed, pkg.bin[pkg.name]);
@@ -43,12 +54,12 @@ try {
     "bin has a node shebang"
   );
 
-  const sdk = (p) =>
+  const clientPackage = (p) =>
     import(
-      pathToFileURL(join(work, "node_modules/@modelcontextprotocol/sdk/dist/esm", p)).href
+      pathToFileURL(join(work, "node_modules/@modelcontextprotocol/client/dist", p)).href
     );
-  const { Client } = await sdk("client/index.js");
-  const { StdioClientTransport } = await sdk("client/stdio.js");
+  const { Client } = await clientPackage("index.mjs");
+  const { StdioClientTransport } = await clientPackage("stdio.mjs");
 
   const client = new Client({ name: "smoke", version: "0" });
   await client.connect(
@@ -80,6 +91,35 @@ try {
     );
   } finally {
     await client.close();
+  }
+
+  // The 2026-07-28 protocol, from the installed package.
+  const modern = new Client(
+    { name: "smoke-modern", version: "0" },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } }
+  );
+  await modern.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [binPath],
+      stderr: "ignore"
+    })
+  );
+  try {
+    check(
+      modern.getNegotiatedProtocolVersion() === "2026-07-28",
+      "serves the 2026-07-28 protocol"
+    );
+    const refused = await modern.callTool({
+      name: "fetch_url",
+      arguments: { url: "http://169.254.169.254/" }
+    });
+    check(
+      refused.structuredContent?.error?.code === "POLICY_REJECTED",
+      "the 2026-07-28 protocol gets the same refusal"
+    );
+  } finally {
+    await modern.close();
   }
 
   // A real conversion: proves the worker thread loads from the installed package.

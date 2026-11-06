@@ -56,7 +56,9 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@mozilla/readability": "^0.6.0",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
@@ -65,6 +67,8 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.5",
     "@types/turndown": "^5.0.4",
@@ -75,7 +79,7 @@
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
   },
-  "//": "@modelcontextprotocol/sdk floor is deliberate: 1.21.1 first fixed DNS rebinding (CVE-2025-66414/66416); keep it on the latest 1.x and re-verify periodically. overrides.minimatch: the ESLint toolchain still pins minimatch ^10, which has an advisory (GHSA-g3hv-75wg-m249, fixed in 11.0.1); dev-only. Remove the override once eslint and typescript-eslint depend on minimatch >=11.",
+  "//": "@modelcontextprotocol/sdk is a devDependency on purpose: test/protocolEras.spec.ts uses its client to prove 2025-era clients still work. overrides.minimatch: the ESLint toolchain still pins minimatch ^10, which has an advisory (GHSA-g3hv-75wg-m249, fixed in 11.0.1); dev-only. Remove the override once eslint and typescript-eslint depend on minimatch >=11.",
   "overrides": {
     "minimatch": "^11.0.3"
   }

@@ -56,6 +56,8 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Moved to MCP SDK v2**, and now serves the 2026-07-28 protocol over stdio and HTTP. 2025-era
+  clients keep working, which tests check with the real v1 client on both transports.
 - **Breaking: robots.txt is respected by default,** so URLs a site disallows are now refused.
 - The default User-Agent now includes the version and the project URL.
 - **Breaking: HTTP mode won't start on a non-loopback address without `SAFE_FETCH_HTTP_TOKEN`.** It

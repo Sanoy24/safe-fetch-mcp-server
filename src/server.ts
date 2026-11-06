@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { getConfig, type SafeFetchConfig } from "./config.js";
 import {
   DEFAULT_MAX_CHARS,

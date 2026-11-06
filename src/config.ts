@@ -231,7 +231,7 @@ export interface HttpTransportConfig {
    * meaning NO Origin is trusted — legitimate MCP clients (CLI bridges,
    * server-to-server callers) don't send one, so any request that does is refused.
    * This is the Origin-validation half of DNS-rebinding protection; Host-header
-   * validation is handled separately by the SDK's createMcpExpressApp().
+   * validation is handled separately in httpApp.ts.
    */
   readonly allowedOrigins: readonly string[];
   /** Extra hostnames accepted in the Host header, such as a reverse proxy's public name. */

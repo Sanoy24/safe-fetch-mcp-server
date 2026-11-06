@@ -2,8 +2,8 @@ import { createRequire } from "node:module";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createHttpApp } from "../src/httpApp.js";
 import type { HttpTransportConfig } from "../src/config.js";
 
