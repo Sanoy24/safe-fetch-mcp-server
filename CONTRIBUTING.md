@@ -47,7 +47,7 @@ These are the rules the guard exists to enforce. The attacks behind them are in
 
 ## Setup
 
-Requires Node 22+ (the version in `.nvmrc` is the one used for development).
+Requires Node 22.23.4+, 24.22.1+ or 26.12.1+ (the version in `.nvmrc` is the one used for development).
 
 ```bash
 npm ci

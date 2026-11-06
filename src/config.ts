@@ -34,6 +34,11 @@ export interface SafeFetchConfig {
   userAgent?: string;
   /** How long a converted page stays readable in chunks. loadConfig defaults to 5 minutes. */
   snapshotTtlMs?: number;
+  /**
+   * Test seam, deliberately not an environment setting: operators can't turn this on for a
+   * runtime with the decoder bug. Undefined decides from the running Node version.
+   */
+  brotli?: boolean;
   /** Outbound requests at once, overall. Default 16. */
   maxConcurrent?: number;
   /** Outbound requests at once to one host. Default 4. */

@@ -10,6 +10,7 @@ import {
   loadHttpConfig
 } from "./config.js";
 import { createHttpApp } from "./httpApp.js";
+import { runtimeWarning } from "./security/runtime.js";
 
 // stdout is reserved for MCP protocol traffic in stdio mode; log only to stderr.
 
@@ -77,6 +78,9 @@ process.stdout.on("error", (err: NodeJS.ErrnoException) => {
 
 async function main(): Promise<void> {
   applyCompatFlags(process.argv.slice(2));
+
+  const warning = runtimeWarning();
+  if (warning) console.error(warning);
 
   // Validate every setting before accepting any request.
   getConfig();

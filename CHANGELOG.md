@@ -6,6 +6,18 @@ this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Node's Brotli decoder bug (CVE-2026-111497):** a hostile page could reach this out-of-bounds write,
+  because the server decompresses what sites send. On an affected Node, the server no longer offers or
+  decodes Brotli and warns at startup. Other compression still works.
+
+### Changed
+
+- **Requires a patched Node:** 22.23.4+, 24.22.1+ or 26.12.1+. Older versions still run with Brotli
+  turned off, as npm only warns about this. Upgrade anyway: these Node releases fix other
+  vulnerabilities too.
+
 ## [0.6.0] - 2026-11-06
 
 ### Security
