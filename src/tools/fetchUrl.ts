@@ -19,6 +19,7 @@ import {
   type PageSnapshot
 } from "../content/pageSnapshots.js";
 import { hasSmuggledText, stripInvisible } from "../content/sanitize.js";
+import { renderOutline, selectJson, selectSection } from "../content/select.js";
 
 export const DEFAULT_MAX_CHARS = 20_000;
 
@@ -42,6 +43,28 @@ export const FetchUrlInput = z
       .default("alt")
       .describe(
         "'alt' (default) replaces images with their alt text, because a client that auto-loads image URLs would contact an address the page chose; 'keep' keeps http(s) images as markdown."
+      ),
+    json_pointer: z
+      .string()
+      .max(2_048)
+      .regex(/^(\/|$)/, "must be empty or start with /")
+      .optional()
+      .describe(
+        "Return one value from a JSON response, by RFC 6901 JSON Pointer, for example '/info/version' or '/items/0/name'. Saves reading the whole document."
+      ),
+    section: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe(
+        "Return one section of the page: the heading with this title (case-insensitive; exact match first, then partial) and everything under it. Needs format 'markdown'."
+      ),
+    outline: z
+      .boolean()
+      .default(false)
+      .describe(
+        "Return only the page's headings, each with the start_index that jumps to it. Use it to find what to read in a long page. Needs format 'markdown'."
       ),
     max_bytes: z
       .number()
@@ -145,6 +168,12 @@ export const FetchUrlOutput = z.object({
     .optional()
     .describe("Publication date declared by the page (untrusted)."),
   siteName: z.string().optional().describe("Site name (from the page; untrusted)."),
+  selection: z
+    .enum(["json_pointer", "section", "outline"])
+    .optional()
+    .describe(
+      "Which part of the page was returned, when not all of it. totalChars and the paging offsets then refer to that part."
+    ),
   fromSnapshot: z
     .boolean()
     .optional()
@@ -288,7 +317,46 @@ function pageBounds(
 }
 
 function continuationNote(start: number, end: number, total: number): string {
-  return `\n\n[Showing characters ${start}–${end} of ${total}. Call fetch_url again with start_index=${end} to continue.]`;
+  return `\n\n[Showing characters ${start}–${end} of ${total}. Call fetch_url again with the same arguments and start_index=${end} to continue.]`;
+}
+
+type Selection = "json_pointer" | "section" | "outline";
+
+/** A problem with the arguments themselves, found before anything is fetched. */
+function selectionProblem(input: FetchUrlInput): string | null {
+  const chosen = [
+    input.json_pointer !== undefined,
+    input.section !== undefined,
+    input.outline
+  ].filter(Boolean).length;
+  if (chosen > 1) {
+    return "Refused: use only one of json_pointer, section and outline in a call.";
+  }
+  if (input.format === "raw" && (input.section !== undefined || input.outline)) {
+    return "Refused: section and outline work on markdown, so they can't be used with format 'raw'.";
+  }
+  return null;
+}
+
+function selectText(
+  text: string,
+  input: FetchUrlInput
+): { text: string; selection?: Selection; smuggled?: boolean } {
+  if (input.json_pointer !== undefined) {
+    const value = selectJson(text, input.json_pointer);
+    // Parsing turns JSON escapes into real characters, so an invisible character written
+    // as an escape only appears now. This text must be cleaned again.
+    return {
+      text: stripInvisible(value),
+      selection: "json_pointer",
+      smuggled: hasSmuggledText(value)
+    };
+  }
+  if (input.section !== undefined) {
+    return { text: selectSection(text, input.section), selection: "section" };
+  }
+  if (input.outline) return { text: renderOutline(text), selection: "outline" };
+  return { text };
 }
 
 interface RenderDetails {
@@ -306,7 +374,11 @@ function renderPage(
   logUrl: string,
   details: RenderDetails
 ): FetchUrlToolResult {
-  const { text } = page;
+  const { text, selection, smuggled } = selectText(page.text, input);
+  const hints: Hint[] = [...page.hints];
+  if (smuggled && !hints.includes("suspicious-hidden-content-removed")) {
+    hints.push("suspicious-hidden-content-removed");
+  }
   const { start, end } = pageBounds(text, input.start_index, input.max_chars);
   const nextStartIndex = end < text.length ? end : null;
   const chunk = text.slice(start, end);
@@ -342,7 +414,8 @@ function renderPage(
       startIndex: start,
       nextStartIndex,
       extraction: page.extraction,
-      ...(page.hints.length > 0 ? { hints: [...page.hints] } : {}),
+      ...(hints.length > 0 ? { hints } : {}),
+      ...(selection ? { selection } : {}),
       ...page.metadata,
       fromCache,
       ...(details.fromSnapshot ? { fromSnapshot: true } : {}),
@@ -370,6 +443,11 @@ export async function runFetchUrl(
     return errorResult("INVALID_INPUT", "Refused: invalid input for fetch_url.");
   }
   const input = parsed.data;
+  const problem = selectionProblem(input);
+  if (problem) {
+    auditLog(baseConfig, { outcome: "refused", code: "INVALID_INPUT", reason: problem });
+    return errorResult("INVALID_INPUT", problem);
+  }
   const logUrl = redactUrl(input.url);
 
   // The caller (an LLM, possibly steered by fetched content) may only tighten the
@@ -382,9 +460,10 @@ export async function runFetchUrl(
   const started = Date.now();
   const key = snapshotKey(input, cfg.maxBytes);
   try {
-    // A later chunk reads the version the first chunk saw. Only the request is skipped:
+    // A later chunk, or a section chosen from an outline, reads the version already seen. Only the request is skipped:
     // the chain goes through every guard check again, as a response cache hit does.
-    const snapshot = input.start_index > 0 ? getSnapshot(key) : undefined;
+    const canReuse = input.start_index > 0 || input.section !== undefined;
+    const snapshot = canReuse ? getSnapshot(key) : undefined;
     if (snapshot) {
       await assertChainAllowed(snapshot.urlChain, cfg);
       return renderPage(snapshot, input, cfg, logUrl, { fromSnapshot: true });
@@ -447,7 +526,9 @@ export async function runFetchUrl(
         : {})
     };
     const isOk = result.status >= 200 && result.status < 300;
-    if (isOk && page.text.length > input.max_chars) saveSnapshot(key, page, cfg);
+    const expectMoreReads =
+      page.text.length > input.max_chars || input.outline || input.section !== undefined;
+    if (isOk && expectMoreReads) saveSnapshot(key, page, cfg);
     else dropSnapshot(key);
 
     return renderPage(page, input, cfg, logUrl, {
