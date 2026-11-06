@@ -181,6 +181,7 @@ export async function fetchWithCache(
     const refreshed: SafeFetchResult = {
       ...cached,
       urlChain: result.urlChain,
+      peerIps: result.peerIps,
       ...(result.etag ? { etag: result.etag } : {}),
       ...(result.lastModified ? { lastModified: result.lastModified } : {}),
       ...(result.cacheControl ? { cacheControl: result.cacheControl } : {})

@@ -29,11 +29,17 @@ this project follows [Semantic Versioning](https://semver.org/).
 - **More addresses blocked:** the Azure platform address `168.63.129.16` and Oracle's legacy
   metadata address `192.0.0.192` are now never allowed, and `192.88.99.0/24`, `3fff::/20` and the
   rest of `2001::/23` are treated as non-public.
+- **Audit log:** credentials from a refused URL (`user:pass@host`) were written to the log. They're
+  now removed.
 - **HTTP mode authentication:** new optional bearer token, `SAFE_FETCH_HTTP_TOKEN`, compared in
   constant time and rate-limited.
 
 ### Added
 
+- `retryAfterSeconds` in `structuredContent` for a 429 or 503 that says how long to wait. Values over
+  a day are ignored.
+- The audit log now records invalid input (where it was wrong, never the values), every redirect
+  hop including a refused target, and the address connected to. None of this reaches the model.
 - `SAFE_FETCH_ALLOWED_HOSTS`, so HTTP mode works behind a real hostname, which previously got a 403.
 - `SAFE_FETCH_TRUST_PROXY`, so rate limits apply per client behind a reverse proxy.
 
