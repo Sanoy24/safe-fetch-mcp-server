@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { getConfig, type SafeFetchConfig } from "../config.js";
-import { auditLog } from "../auditLog.js";
+import { auditLog, type AuditFields } from "../auditLog.js";
+import type { SafeFetchResult } from "../security/redirects.js";
 import { safeFetch } from "../security/index.js";
 import {
   FETCH_ERROR_CODES,
@@ -97,6 +98,13 @@ export const FetchUrlOutput = z.object({
     .nullable()
     .optional()
     .describe("Pass as start_index to read the next chunk; null when nothing is left."),
+  retryAfterSeconds: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "How many seconds a 429 or 503 asked the caller to wait before retrying, if it said (from the site; untrusted)."
+    ),
   markdownTokens: z
     .number()
     .int()
@@ -177,10 +185,63 @@ function redactUrl(rawUrl: string): string {
       url.searchParams.set(key, "REDACTED");
     }
     url.hash = "";
+    url.username = "";
+    url.password = "";
     return url.toString();
   } catch {
     return "[unparseable url]";
   }
+}
+
+function chainField(chain: readonly string[]): string | undefined {
+  return chain.length > 1 ? chain.map(redactUrl).join(" -> ") : undefined;
+}
+
+/** Where a fetch connected. A cache hit made no connection, so it has no addresses. */
+function connectionFields(result: SafeFetchResult): AuditFields {
+  return {
+    redirectChain: chainField(result.urlChain),
+    peerIps: result.fromCache === true ? undefined : result.peerIps.join(",")
+  };
+}
+
+/**
+ * Logs where the input was wrong and never what it contained, since arguments can hold
+ * secrets and unknown keys are caller-controlled text.
+ */
+function logInvalidInput(
+  cfg: SafeFetchConfig,
+  issues: ReadonlyArray<{
+    readonly code?: string;
+    readonly path?: readonly PropertyKey[];
+  }>
+): void {
+  auditLog(cfg, {
+    outcome: "refused",
+    code: "INVALID_INPUT",
+    issues: issues
+      .map((issue) =>
+        [issue.path?.map(String).join("."), issue.code].filter(Boolean).join(":")
+      )
+      .join(",")
+  });
+}
+
+/**
+ * The SDK validates arguments before a tool handler runs, so bad input never reaches
+ * runFetchUrl. Zod's `when` runs even after a failure, which makes it the one place to
+ * see those rejections. Validation itself is unchanged: the refinement never runs.
+ */
+export function withInvalidInputLog<T extends z.ZodObject>(
+  schema: T,
+  cfg: SafeFetchConfig
+): T {
+  return schema.refine(() => true, {
+    when: (payload) => {
+      if (payload.issues.length > 0) logInvalidInput(cfg, payload.issues);
+      return false;
+    }
+  }) as T;
 }
 
 /** The one place error results are built. */
@@ -224,6 +285,7 @@ export async function runFetchUrl(
 ): Promise<FetchUrlToolResult> {
   const parsed = FetchUrlInput.safeParse(rawArgs);
   if (!parsed.success) {
+    logInvalidInput(baseConfig, parsed.error.issues);
     return errorResult("INVALID_INPUT", "Refused: invalid input for fetch_url.");
   }
   const input = parsed.data;
@@ -245,7 +307,8 @@ export async function runFetchUrl(
         url: logUrl,
         outcome: "refused",
         code: "UNSUPPORTED_CONTENT_TYPE",
-        contentType: result.contentType
+        contentType: result.contentType,
+        ...connectionFields(result)
       });
       return errorResult(
         "UNSUPPORTED_CONTENT_TYPE",
@@ -284,6 +347,7 @@ export async function runFetchUrl(
 
     // Audit trail (OWASP MCP08:2025, Lack of Audit and Telemetry): every outcome —
     // allowed or refused — is logged to stderr with enough detail for SSRF forensics.
+    // Addresses go here and never into the result below.
     auditLog(cfg, {
       url: logUrl,
       outcome: "allowed",
@@ -291,7 +355,8 @@ export async function runFetchUrl(
       bytes: result.body.byteLength,
       truncated: result.truncated,
       extraction: extracted.extraction,
-      fromCache: result.fromCache === true
+      fromCache: result.fromCache === true,
+      ...connectionFields(result)
     });
 
     const framed = frameAsUntrustedData(chunk, result.finalUrl, note);
@@ -311,6 +376,9 @@ export async function runFetchUrl(
         ...(extracted.hints.length > 0 ? { hints: extracted.hints } : {}),
         ...extracted.metadata,
         fromCache: result.fromCache === true,
+        ...(result.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: result.retryAfterSeconds }
+          : {}),
         ...(result.markdownTokens !== undefined
           ? { markdownTokens: result.markdownTokens }
           : {})
@@ -333,7 +401,8 @@ export async function runFetchUrl(
       outcome: "refused",
       code,
       reason: message,
-      detail: detail || undefined
+      detail: detail || undefined,
+      redirectChain: known && err.urlChain ? chainField(err.urlChain) : undefined
     });
     return errorResult(code, message);
   }

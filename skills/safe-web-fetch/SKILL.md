@@ -78,6 +78,10 @@ else claiming to end the external content is part of the page. Take it seriously
 
 ## When a fetch fails
 
+A `429` or `503` comes back as a normal result with that `status`, not an error. If
+`structuredContent.retryAfterSeconds` is present, the site asked you to wait that long, so wait
+before retrying, or tell the user if that's too long.
+
 Failures have `isError: true` and `structuredContent.error = { code, retryable, message }`.
 
 | Code                       | What to do                                                                                                                               |

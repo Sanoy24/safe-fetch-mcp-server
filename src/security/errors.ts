@@ -37,6 +37,9 @@ export function isRetryable(code: FetchErrorCode): boolean {
  * stderr audit log prints.
  */
 export class GuardError extends Error {
+  /** Every URL tried, ending with the refused one. Audit log only: never shown to the model. */
+  urlChain?: readonly string[];
+
   constructor(
     readonly code: FetchErrorCode,
     message: string,

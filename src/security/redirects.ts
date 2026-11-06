@@ -18,6 +18,8 @@ export interface SafeFetchResult {
   readonly truncated: boolean;
   /** Every URL requested, in order; the last one is finalUrl. */
   readonly urlChain: readonly string[];
+  /** The address actually connected to for each hop. Audit log only, never in results. */
+  readonly peerIps: readonly string[];
   /** True when the body came from the response cache. */
   readonly fromCache?: boolean;
   /** Cache validators and directives from the final response, if present. */
@@ -26,6 +28,8 @@ export interface SafeFetchResult {
   readonly cacheControl?: string;
   /** Token count the site reported for its markdown (x-markdown-tokens), if any. */
   readonly markdownTokens?: number;
+  /** How long a 429 or 503 asked the caller to wait, if it said. */
+  readonly retryAfterSeconds?: number;
 }
 
 /**
@@ -53,6 +57,7 @@ interface RawResponse {
   readonly headers: http.IncomingHttpHeaders;
   readonly body: Buffer;
   readonly truncated: boolean;
+  readonly peerIp: string;
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -154,6 +159,26 @@ function connectFailureCause(err: Error): string {
     : err.message;
 }
 
+const MAX_RETRY_AFTER_SECONDS = 86_400;
+
+/**
+ * Reads a Retry-After header (seconds or an HTTP date). The value comes from the page, so
+ * anything over a day is dropped rather than letting a site tell an agent to wait forever.
+ */
+export function parseRetryAfter(
+  value: string | undefined,
+  now: number = Date.now()
+): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const seconds = /^\d{1,9}$/.test(trimmed)
+    ? Number(trimmed)
+    : /^[A-Za-z]{3}/.test(trimmed)
+      ? Math.max(0, Math.ceil((Date.parse(trimmed) - now) / 1000))
+      : Number.NaN;
+  return Number.isNaN(seconds) || seconds > MAX_RETRY_AFTER_SECONDS ? undefined : seconds;
+}
+
 function performPinnedRequest(
   url: URL,
   pinned: PinnedTarget,
@@ -203,6 +228,8 @@ function performPinnedRequest(
         }
       },
       (res) => {
+        // Read now: the socket may be gone once the body has ended.
+        const peerIp = res.socket.remoteAddress ?? "unknown";
         const chunks: Buffer[] = [];
         let received = 0;
 
@@ -247,6 +274,7 @@ function performPinnedRequest(
               status: res.statusCode ?? 0,
               headers: res.headers,
               body: Buffer.concat(chunks),
+              peerIp,
               truncated: true
             });
             if (decoder) decoder.destroy();
@@ -261,6 +289,7 @@ function performPinnedRequest(
             status: res.statusCode ?? 0,
             headers: res.headers,
             body: Buffer.concat(chunks),
+            peerIp,
             truncated: false
           });
         });
@@ -358,10 +387,12 @@ export async function fetchWithRedirects(
   const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
   const { signal } = controller;
 
+  const attempted = [rawUrl];
   try {
     let currentUrl = rawUrl;
     let redirectCount = 0;
     const urlChain: string[] = [];
+    const peerIps: string[] = [];
 
     for (;;) {
       const url = parseAndValidateUrl(currentUrl, cfg);
@@ -378,6 +409,8 @@ export async function fetchWithRedirects(
         signal,
         conditionalHeaders(url, options.conditional)
       );
+
+      peerIps.push(response.peerIp);
 
       if (REDIRECT_STATUSES.has(response.status)) {
         const location = response.headers.location;
@@ -403,8 +436,9 @@ export async function fetchWithRedirects(
             "Refused: redirect response had an invalid Location header."
           );
         }
-        assertRedirectAllowed(url, next, cfg);
         currentUrl = next.toString();
+        attempted.push(currentUrl);
+        assertRedirectAllowed(url, next, cfg);
         continue;
       }
 
@@ -418,20 +452,29 @@ export async function fetchWithRedirects(
         tokensHeader !== undefined && /^\d{1,9}$/.test(tokensHeader)
           ? Number(tokensHeader)
           : undefined;
+      const retryAfterSeconds =
+        response.status === 429 || response.status === 503
+          ? parseRetryAfter(firstHeader(response.headers["retry-after"]))
+          : undefined;
 
       return {
         status: response.status,
         finalUrl: url.toString(),
         urlChain,
+        peerIps,
         contentType,
         body: response.body,
         truncated: response.truncated,
         ...(etag !== undefined ? { etag } : {}),
         ...(lastModified !== undefined ? { lastModified } : {}),
         ...(cacheControl !== undefined ? { cacheControl } : {}),
-        ...(markdownTokens !== undefined ? { markdownTokens } : {})
+        ...(markdownTokens !== undefined ? { markdownTokens } : {}),
+        ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {})
       };
     }
+  } catch (err) {
+    if (err instanceof GuardError) err.urlChain = attempted;
+    throw err;
   } finally {
     clearTimeout(timer);
   }
