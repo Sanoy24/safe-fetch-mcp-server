@@ -85,6 +85,12 @@ function prune(metadata: PageMetadata): PageMetadata {
 
 type Doc = ReturnType<typeof parseHTML>["document"];
 
+/** The page content. HTML5 lets pages omit <body>, and linkedom doesn't infer it. */
+function contentRoot(document: Doc): Doc["documentElement"] {
+  const body = document.body;
+  return body && body.childNodes.length > 0 ? body : document.documentElement;
+}
+
 function htmlMetadata(document: Doc, baseUrl: string | undefined): PageMetadata {
   const meta = (selector: string): string | null | undefined =>
     document.querySelector(selector)?.getAttribute("content");
@@ -184,8 +190,8 @@ function looksLikeJavaScriptShell(document: Doc): boolean {
   );
   if (!noscriptAsksForJs && !emptyMount) return false;
 
-  const clone = document.body?.cloneNode(true) as typeof document.body | undefined;
-  if (!clone) return true;
+  const clone = contentRoot(document).cloneNode(true) as Doc["documentElement"];
+  for (const el of [...clone.querySelectorAll("head, title")]) el.remove();
   for (const el of [...clone.querySelectorAll("script, style, noscript, template")])
     el.remove();
   return (
@@ -242,7 +248,9 @@ export function extractContent(
     return full("fallback-full");
   }
 
-  const pageChars = (document.body?.textContent ?? "").replace(/\s+/g, " ").trim().length;
+  const pageChars = (contentRoot(document).textContent ?? "")
+    .replace(/\s+/g, " ")
+    .trim().length;
   const codeBlocksBefore = document.querySelectorAll("pre").length;
 
   let article: ReturnType<Readability["parse"]> = null;

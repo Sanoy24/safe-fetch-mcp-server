@@ -4,6 +4,7 @@
 // files in the tarball, a broken bin/shebang, or runtime-only dependency gaps.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -79,6 +80,37 @@ try {
     );
   } finally {
     await client.close();
+  }
+
+  // A real conversion: proves the worker thread loads from the installed package.
+  const fixture = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(
+      "<html><body><article><h1>Smoke page</h1><p>Converted.</p></article></body></html>"
+    );
+  });
+  await new Promise((done) => fixture.listen(0, "127.0.0.1", done));
+  const local = new Client({ name: "smoke-local", version: "0" });
+  await local.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [binPath],
+      env: { ...process.env, SAFE_FETCH_ALLOW_LOCAL: "true" },
+      stderr: "ignore"
+    })
+  );
+  try {
+    const page = await local.callTool({
+      name: "fetch_url",
+      arguments: { url: `http://127.0.0.1:${fixture.address().port}/` }
+    });
+    check(
+      String(page.structuredContent?.text).includes("# Smoke page"),
+      "a page is converted by the worker thread"
+    );
+  } finally {
+    await local.close();
+    fixture.close();
   }
 
   // --compat: the drop-in replacement path for the reference fetch server.

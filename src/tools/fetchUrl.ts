@@ -9,12 +9,8 @@ import {
   type FetchErrorCode
 } from "../security/errors.js";
 import { decodeBody, isTextualContentType } from "../content/toMarkdown.js";
-import {
-  extractContent,
-  HINTS,
-  type Hint,
-  type PageMetadata
-} from "../content/extract.js";
+import { HINTS, type Hint, type PageMetadata } from "../content/extract.js";
+import { extractInWorker } from "../content/extractPool.js";
 
 export const DEFAULT_MAX_CHARS = 20_000;
 
@@ -192,6 +188,10 @@ function continuationNote(start: number, end: number, total: number): string {
   return `\n\n[Showing characters ${start}–${end} of ${total}. Call fetch_url again with start_index=${end} to continue.]`;
 }
 
+// Page conversion shares SAFE_FETCH_TIMEOUT_MS with the fetch, but always gets at least
+// this long so that a slow download doesn't turn every page into a failure.
+const MIN_PROCESSING_MS = 2_000;
+
 export async function runFetchUrl(
   rawArgs: unknown,
   baseConfig: SafeFetchConfig = getConfig()
@@ -210,6 +210,7 @@ export async function runFetchUrl(
       ? { ...baseConfig, maxBytes: Math.min(input.max_bytes, baseConfig.maxBytes) }
       : baseConfig;
 
+  const started = Date.now();
   try {
     const result = await safeFetch(input.url, cfg);
 
@@ -234,7 +235,15 @@ export async function runFetchUrl(
             metadata: {} as PageMetadata,
             hints: [] as Hint[]
           }
-        : extractContent(result.body, result.contentType, input.extract, result.finalUrl);
+        : await extractInWorker(
+            {
+              body: result.body,
+              contentType: result.contentType,
+              mode: input.extract,
+              baseUrl: result.finalUrl
+            },
+            Math.max(cfg.timeoutMs - (Date.now() - started), MIN_PROCESSING_MS)
+          );
     const text = extracted.markdown;
 
     const start = Math.min(input.start_index, text.length);
