@@ -103,7 +103,10 @@ function touch(key: string, entry: CacheEntry): void {
   entries.set(key, entry);
 }
 
-async function withDeadline<T>(work: Promise<T>, cfg: SafeFetchConfig): Promise<T> {
+export async function withDeadline<T>(
+  work: Promise<T>,
+  cfg: SafeFetchConfig
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -125,7 +128,7 @@ async function withDeadline<T>(work: Promise<T>, cfg: SafeFetchConfig): Promise<
 }
 
 /** Re-runs every guard check a live fetch of this chain would run, minus the request. */
-async function assertChainStillAllowed(
+export async function assertChainStillAllowed(
   urlChain: readonly string[],
   cfg: SafeFetchConfig,
   options: SafeFetchOptions

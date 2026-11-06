@@ -32,6 +32,8 @@ export interface SafeFetchConfig {
   robots?: "respect" | "ignore";
   /** User-Agent on every request. Undefined means DEFAULT_USER_AGENT. */
   userAgent?: string;
+  /** How long a converted page stays readable in chunks. loadConfig defaults to 5 minutes. */
+  snapshotTtlMs?: number;
   /** Outbound requests at once, overall. Default 16. */
   maxConcurrent?: number;
   /** Outbound requests at once to one host. Default 4. */
@@ -192,6 +194,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SafeFetchConfi
     },
     logFormat: parseLogFormat(env["SAFE_FETCH_LOG_FORMAT"]),
     robots: parseRobotsPolicy(env["SAFE_FETCH_ROBOTS"]),
+    snapshotTtlMs: parseIntEnv(
+      "SAFE_FETCH_SNAPSHOT_TTL_MS",
+      env["SAFE_FETCH_SNAPSHOT_TTL_MS"],
+      300_000,
+      { min: 0 }
+    ),
     maxConcurrent: parseIntEnv(
       "SAFE_FETCH_MAX_CONCURRENT",
       env["SAFE_FETCH_MAX_CONCURRENT"],

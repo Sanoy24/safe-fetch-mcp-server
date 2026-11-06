@@ -40,6 +40,8 @@ this project follows [Semantic Versioning](https://semver.org/).
   `ROBOTS_DISALLOWED` and `ROBOTS_UNAVAILABLE`. Set `SAFE_FETCH_ROBOTS=ignore` or
   `--ignore-robots-txt` to turn it off.
 - `SAFE_FETCH_USER_AGENT` and `--user-agent`.
+- **Stable pagination:** later chunks of a long page read the same version as the first, without
+  downloading it again, for up to five minutes (`SAFE_FETCH_SNAPSHOT_TTL_MS`). `fromSnapshot` marks them.
 - **Outbound concurrency limits:** `SAFE_FETCH_MAX_CONCURRENT` (16) and `SAFE_FETCH_MAX_PER_HOST` (4).
   Extra requests wait, and the wait counts against the timeout. The page conversion queue is bounded too.
 - `retryAfterSeconds` in `structuredContent` for a 429 or 503 that says how long to wait. Values over

@@ -2,8 +2,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { getConfig, type SafeFetchConfig } from "../config.js";
 import { auditLog, type AuditFields } from "../auditLog.js";
-import type { SafeFetchResult } from "../security/redirects.js";
-import { safeFetch } from "../security/index.js";
+import { assertChainAllowed, safeFetch } from "../security/index.js";
 import {
   FETCH_ERROR_CODES,
   GuardError,
@@ -13,6 +12,12 @@ import {
 import { decodeBody, isTextualContentType } from "../content/toMarkdown.js";
 import { HINTS, type Hint, type PageMetadata } from "../content/extract.js";
 import { extractInWorker } from "../content/extractPool.js";
+import {
+  dropSnapshot,
+  getSnapshot,
+  saveSnapshot,
+  type PageSnapshot
+} from "../content/pageSnapshots.js";
 import { hasSmuggledText, stripInvisible } from "../content/sanitize.js";
 
 export const DEFAULT_MAX_CHARS = 20_000;
@@ -140,6 +145,12 @@ export const FetchUrlOutput = z.object({
     .optional()
     .describe("Publication date declared by the page (untrusted)."),
   siteName: z.string().optional().describe("Site name (from the page; untrusted)."),
+  fromSnapshot: z
+    .boolean()
+    .optional()
+    .describe(
+      "True if this chunk came from the copy kept since the first chunk, so all chunks of a page match."
+    ),
   fromCache: z
     .boolean()
     .optional()
@@ -197,12 +208,17 @@ function chainField(chain: readonly string[]): string | undefined {
   return chain.length > 1 ? chain.map(redactUrl).join(" -> ") : undefined;
 }
 
-/** Where a fetch connected. A cache hit made no connection, so it has no addresses. */
-function connectionFields(result: SafeFetchResult): AuditFields {
-  return {
-    redirectChain: chainField(result.urlChain),
-    peerIps: result.fromCache === true ? undefined : result.peerIps.join(",")
-  };
+/** Where a fetch connected. Pass no addresses when no connection was made. */
+function connectionFields(
+  urlChain: readonly string[],
+  peerIps: readonly string[] | undefined
+): AuditFields {
+  return { redirectChain: chainField(urlChain), peerIps: peerIps?.join(",") };
+}
+
+// Everything that changes the converted text, and the byte limit, which changes the input.
+function snapshotKey(input: FetchUrlInput, maxBytes: number): string {
+  return JSON.stringify([input.url, input.format, input.extract, input.images, maxBytes]);
 }
 
 /**
@@ -275,6 +291,71 @@ function continuationNote(start: number, end: number, total: number): string {
   return `\n\n[Showing characters ${start}–${end} of ${total}. Call fetch_url again with start_index=${end} to continue.]`;
 }
 
+interface RenderDetails {
+  readonly fromSnapshot?: boolean;
+  readonly fromCache?: boolean;
+  readonly peerIps?: readonly string[] | undefined;
+  readonly retryAfterSeconds?: number | undefined;
+}
+
+/** The one place a successful result is built, and its audit line written. */
+function renderPage(
+  page: PageSnapshot,
+  input: FetchUrlInput,
+  cfg: SafeFetchConfig,
+  logUrl: string,
+  details: RenderDetails
+): FetchUrlToolResult {
+  const { text } = page;
+  const { start, end } = pageBounds(text, input.start_index, input.max_chars);
+  const nextStartIndex = end < text.length ? end : null;
+  const chunk = text.slice(start, end);
+  const note = nextStartIndex !== null ? continuationNote(start, end, text.length) : "";
+  const fromCache = details.fromCache === true;
+
+  // Audit trail (OWASP MCP08:2025, Lack of Audit and Telemetry): every outcome —
+  // allowed or refused — is logged to stderr with enough detail for SSRF forensics.
+  // Addresses go here and never into the result below.
+  auditLog(cfg, {
+    url: logUrl,
+    outcome: "allowed",
+    status: page.status,
+    bytes: page.bytes,
+    truncated: page.truncated,
+    extraction: page.extraction,
+    fromCache,
+    fromSnapshot: details.fromSnapshot,
+    ...connectionFields(page.urlChain, details.peerIps)
+  });
+
+  const framed = frameAsUntrustedData(chunk, page.finalUrl, note);
+  return {
+    content: [{ type: "text", text: framed }],
+    structuredContent: {
+      text: framed,
+      status: page.status,
+      finalUrl: page.finalUrl,
+      contentType: page.contentType,
+      bytes: page.bytes,
+      truncated: page.truncated,
+      totalChars: text.length,
+      startIndex: start,
+      nextStartIndex,
+      extraction: page.extraction,
+      ...(page.hints.length > 0 ? { hints: [...page.hints] } : {}),
+      ...page.metadata,
+      fromCache,
+      ...(details.fromSnapshot ? { fromSnapshot: true } : {}),
+      ...(details.retryAfterSeconds !== undefined
+        ? { retryAfterSeconds: details.retryAfterSeconds }
+        : {}),
+      ...(page.markdownTokens !== undefined
+        ? { markdownTokens: page.markdownTokens }
+        : {})
+    }
+  };
+}
+
 // Page conversion shares SAFE_FETCH_TIMEOUT_MS with the fetch, but always gets at least
 // this long so that a slow download doesn't turn every page into a failure.
 const MIN_PROCESSING_MS = 2_000;
@@ -299,7 +380,16 @@ export async function runFetchUrl(
       : baseConfig;
 
   const started = Date.now();
+  const key = snapshotKey(input, cfg.maxBytes);
   try {
+    // A later chunk reads the version the first chunk saw. Only the request is skipped:
+    // the chain goes through every guard check again, as a response cache hit does.
+    const snapshot = input.start_index > 0 ? getSnapshot(key) : undefined;
+    if (snapshot) {
+      await assertChainAllowed(snapshot.urlChain, cfg);
+      return renderPage(snapshot, input, cfg, logUrl, { fromSnapshot: true });
+    }
+
     const result = await safeFetch(input.url, cfg);
 
     if (!isTextualContentType(result.contentType)) {
@@ -308,7 +398,10 @@ export async function runFetchUrl(
         outcome: "refused",
         code: "UNSUPPORTED_CONTENT_TYPE",
         contentType: result.contentType,
-        ...connectionFields(result)
+        ...connectionFields(
+          result.urlChain,
+          result.fromCache ? undefined : result.peerIps
+        )
       });
       return errorResult(
         "UNSUPPORTED_CONTENT_TYPE",
@@ -338,52 +431,30 @@ export async function runFetchUrl(
             },
             Math.max(cfg.timeoutMs - (Date.now() - started), MIN_PROCESSING_MS)
           );
-    const text = extracted.markdown;
-
-    const { start, end } = pageBounds(text, input.start_index, input.max_chars);
-    const nextStartIndex = end < text.length ? end : null;
-    const chunk = text.slice(start, end);
-    const note = nextStartIndex !== null ? continuationNote(start, end, text.length) : "";
-
-    // Audit trail (OWASP MCP08:2025, Lack of Audit and Telemetry): every outcome —
-    // allowed or refused — is logged to stderr with enough detail for SSRF forensics.
-    // Addresses go here and never into the result below.
-    auditLog(cfg, {
-      url: logUrl,
-      outcome: "allowed",
+    const page: PageSnapshot = {
+      text: extracted.markdown,
       status: result.status,
+      finalUrl: result.finalUrl,
+      contentType: result.contentType,
       bytes: result.body.byteLength,
       truncated: result.truncated,
       extraction: extracted.extraction,
-      fromCache: result.fromCache === true,
-      ...connectionFields(result)
-    });
-
-    const framed = frameAsUntrustedData(chunk, result.finalUrl, note);
-    return {
-      content: [{ type: "text", text: framed }],
-      structuredContent: {
-        text: framed,
-        status: result.status,
-        finalUrl: result.finalUrl,
-        contentType: result.contentType,
-        bytes: result.body.byteLength,
-        truncated: result.truncated,
-        totalChars: text.length,
-        startIndex: start,
-        nextStartIndex,
-        extraction: extracted.extraction,
-        ...(extracted.hints.length > 0 ? { hints: extracted.hints } : {}),
-        ...extracted.metadata,
-        fromCache: result.fromCache === true,
-        ...(result.retryAfterSeconds !== undefined
-          ? { retryAfterSeconds: result.retryAfterSeconds }
-          : {}),
-        ...(result.markdownTokens !== undefined
-          ? { markdownTokens: result.markdownTokens }
-          : {})
-      }
+      hints: extracted.hints,
+      metadata: extracted.metadata,
+      urlChain: result.urlChain,
+      ...(result.markdownTokens !== undefined
+        ? { markdownTokens: result.markdownTokens }
+        : {})
     };
+    const isOk = result.status >= 200 && result.status < 300;
+    if (isOk && page.text.length > input.max_chars) saveSnapshot(key, page, cfg);
+    else dropSnapshot(key);
+
+    return renderPage(page, input, cfg, logUrl, {
+      fromCache: result.fromCache === true,
+      peerIps: result.fromCache ? undefined : result.peerIps,
+      retryAfterSeconds: result.retryAfterSeconds
+    });
   } catch (err) {
     const known = err instanceof GuardError;
     const code: FetchErrorCode = known ? err.code : "INTERNAL_ERROR";

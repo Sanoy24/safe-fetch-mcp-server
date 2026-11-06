@@ -1,7 +1,11 @@
 import { getConfig, type SafeFetchConfig } from "../config.js";
 import { parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, ResolutionError } from "./resolveAndPin.js";
-import { fetchWithCache } from "./responseCache.js";
+import {
+  assertChainStillAllowed,
+  fetchWithCache,
+  withDeadline
+} from "./responseCache.js";
 import { assertRobotsAllow } from "./robots.js";
 import {
   SafeFetchError,
@@ -32,6 +36,30 @@ export async function assertSafeUrl(
   return url;
 }
 
+function withPoliteness(
+  cfg: SafeFetchConfig,
+  options: SafeFetchOptions
+): SafeFetchOptions {
+  return cfg.robots === "respect"
+    ? { ...options, checkHop: (url) => assertRobotsAllow(url, cfg, options) }
+    : options;
+}
+
+/**
+ * For anything served without a request, such as a page snapshot: runs every check a live
+ * fetch of this redirect chain would run. Throws exactly as that fetch would.
+ */
+export async function assertChainAllowed(
+  urlChain: readonly string[],
+  cfg: SafeFetchConfig,
+  options: SafeFetchOptions = {}
+): Promise<void> {
+  await withDeadline(
+    assertChainStillAllowed(urlChain, cfg, withPoliteness(cfg, options)),
+    cfg
+  );
+}
+
 /**
  * The single hardened fetch path. Every outbound request in this server — including
  * every redirect hop — must go through this function. Do not add a second fetch path.
@@ -43,11 +71,5 @@ export async function safeFetch(
 ): Promise<SafeFetchResult> {
   // The optional cache wraps the single fetch path; it never makes requests itself
   // and re-runs the guard on every hit (see responseCache.ts).
-  return fetchWithCache(
-    rawUrl,
-    cfg,
-    cfg.robots === "respect"
-      ? { ...options, checkHop: (url) => assertRobotsAllow(url, cfg, options) }
-      : options
-  );
+  return fetchWithCache(rawUrl, cfg, withPoliteness(cfg, options));
 }
