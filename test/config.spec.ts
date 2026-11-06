@@ -53,6 +53,7 @@ describe("loadConfig", () => {
       logFormat: "text",
       compatFetchTool: false,
       robots: "respect",
+      snapshotTtlMs: 300_000,
       maxConcurrent: 16,
       maxPerHost: 4,
       userAgent: DEFAULT_USER_AGENT

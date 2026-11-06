@@ -260,7 +260,9 @@ treated as untrusted.
 Successful results carry `structuredContent` with the page `text` (the same framed text as
 the content block, for clients that only show structured output), `status`, `finalUrl`,
 `contentType`, `bytes`, `truncated` (hit the byte limit), `totalChars`,
-`startIndex` and `nextStartIndex` (`null` once there's nothing left). Only text
+`startIndex` and `nextStartIndex` (`null` once there's nothing left). Later chunks read the same
+version as the first, without downloading it again, for up to five minutes (`fromSnapshot: true`).
+Starting again from `start_index: 0` gets a fresh copy. Only text
 content types are returned: HTML, `text/*`, JSON, XML, and `+json`/`+xml` types.
 
 **Markdown negotiation:** every request asks for `text/markdown` first. Sites that support
@@ -386,6 +388,7 @@ fetch-server CVEs, all enforced in CI.
 | `SAFE_FETCH_USER_AGENT` / `--user-agent`    | `safe-fetch-mcp-server/<version> (+repo URL)` | User-Agent on every request. Its leading name is what robots.txt groups match                                       |
 | `SAFE_FETCH_MAX_CONCURRENT`                 | `16`                                          | Outbound requests at once, overall. Extra requests wait, within `SAFE_FETCH_TIMEOUT_MS`                             |
 | `SAFE_FETCH_MAX_PER_HOST`                   | `4`                                           | Outbound requests at once to one host                                                                               |
+| `SAFE_FETCH_SNAPSHOT_TTL_MS`                | `300000`                                      | How long a long page stays readable in chunks from one version. `0` downloads it again for every chunk              |
 | `SAFE_FETCH_COMPAT_TOOL` / `--compat`       | `false`                                       | Also expose the reference server's `fetch` tool and prompt (drop-in migration)                                      |
 
 Invalid values stop the server at startup with a message naming the variable.
