@@ -60,6 +60,7 @@ Unparseable addresses are `forbidden` (fail closed).
 | 25  | Hidden-text prompt injection                        | Instructions in `display:none`, `hidden`, `font-size:0`, off-screen or `<template>` elements, page `<style>` rules, markdown comments, or Unicode tag and zero-width characters | Removed before conversion, best effort (see Not guaranteed); `raw` format removes only invisible characters; injection-like text adds `suspicious-hidden-content-removed`                                                      | `hiddenContent.spec.ts`, `sanitize.spec.ts` |
 | 26  | Slow-to-parse page (algorithmic complexity)         | A few MB of HTML that takes minutes to convert, after the network deadline has passed                                                                                           | Conversion runs in a worker thread with a hard time limit shared with `SAFE_FETCH_TIMEOUT_MS` and a memory limit; large pages are converted in batches; over budget, the thread is killed and the result is `PROCESSING_LIMIT` | `processingLimit.spec.ts`                   |
 | 27  | Unsafe content passed through to the client         | `javascript:` links; an image URL a client auto-loads, contacting a page-chosen address; a page pretending the external content has ended; an instruction-like `<title>`        | Non-http(s)/mailto links become text; images become alt text unless `images: "keep"`; random per-response start and end markers; metadata cleaned, and instruction-like values dropped                                         | `sanitize.spec.ts`                          |
+| 28  | Open HTTP endpoint used as a proxy                  | Binding `0.0.0.0` with no authentication, so anyone on the network can make the server fetch URLs; guessing the token; forging `X-Forwarded-For` to dodge rate limits           | A non-loopback bind without `SAFE_FETCH_HTTP_TOKEN` fails at startup unless `SAFE_FETCH_HTTP_INSECURE=true`; constant-time token check, rate-limited; proxies trusted only by exact hop count                                  | `httpHardening.spec.ts`                     |
 
 ## Not guaranteed
 
@@ -68,9 +69,8 @@ These are outside what the server can enforce. Plan for them separately.
 - **Prompt injection.** Fetched content is labeled as untrusted, but labels don't stop a
   model from following injected instructions. The consuming application needs its own
   defenses.
-- **Authentication in HTTP mode.** There is none. Origin/Host checks are DNS-rebinding
-  protection, not auth. Keep HTTP mode on loopback, or put it behind your own
-  authenticating proxy.
+- **Full authentication in HTTP mode.** `SAFE_FETCH_HTTP_TOKEN` is one shared token, with no
+  users, scopes or OAuth, and no TLS. Origin/Host checks are DNS-rebinding protection, not auth.
 - **Detecting every way to hide text.** Hidden-text removal handles common techniques with a
   parser, not a browser, so it can miss some (e.g. text matching its background, or styles from
   external stylesheets). Hidden elements stay in `format: "raw"`.

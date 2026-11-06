@@ -14,6 +14,8 @@ function testHttpConfig(
     host: "127.0.0.1",
     port: 0,
     allowedOrigins: [],
+    allowedHosts: [],
+    trustProxyHops: 0,
     rateLimitMax: 1000,
     rateLimitWindowMs: 60_000,
     ...overrides

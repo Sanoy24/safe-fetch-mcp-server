@@ -161,16 +161,75 @@ export interface HttpTransportConfig {
    * validation is handled separately by the SDK's createMcpExpressApp().
    */
   readonly allowedOrigins: readonly string[];
+  /** Extra hostnames accepted in the Host header, such as a reverse proxy's public name. */
+  readonly allowedHosts: readonly string[];
+  /** When set, POST /mcp requires this bearer token. */
+  readonly httpToken?: string;
+  /** Reverse proxies in front of this server, for finding the client IP. 0 trusts none. */
+  readonly trustProxyHops: number;
   /** Requests allowed per window, per client IP. */
   readonly rateLimitMax: number;
   readonly rateLimitWindowMs: number;
 }
 
+const MIN_TOKEN_LENGTH = 16;
+const HOSTNAME_ENTRY = /^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)$/;
+
+// Never echoes the value: it's a secret, even when it's an invalid one.
+function parseHttpToken(value: string | undefined): string | undefined {
+  const token = value?.trim();
+  if (!token) return undefined;
+  if (token.length < MIN_TOKEN_LENGTH || /\s/.test(token)) {
+    throw new ConfigError(
+      `SAFE_FETCH_HTTP_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters with no spaces. ` +
+        "Generate one with: openssl rand -hex 32"
+    );
+  }
+  return token;
+}
+
+function parseAllowedHosts(value: string | undefined): readonly string[] {
+  const hosts = parseList(value);
+  for (const host of hosts) {
+    if (!HOSTNAME_ENTRY.test(host)) {
+      throw new ConfigError(
+        `SAFE_FETCH_ALLOWED_HOSTS takes hostnames only, with no scheme, port or wildcard (got "${host}").`
+      );
+    }
+  }
+  return hosts;
+}
+
 export function loadHttpConfig(
   env: NodeJS.ProcessEnv = process.env
 ): HttpTransportConfig {
+  const host = env["HOST"]?.trim() || "127.0.0.1";
+  const httpToken = parseHttpToken(env["SAFE_FETCH_HTTP_TOKEN"]);
+  const insecure = parseBoolean(
+    "SAFE_FETCH_HTTP_INSECURE",
+    env["SAFE_FETCH_HTTP_INSECURE"],
+    false
+  );
+  if (!isLoopbackHost(host) && httpToken === undefined && !insecure) {
+    throw new ConfigError(
+      `HOST is ${host}, which isn't loopback, and no SAFE_FETCH_HTTP_TOKEN is set. Anyone who ` +
+        "could reach this address could make this server fetch URLs. Set SAFE_FETCH_HTTP_TOKEN, " +
+        "or set SAFE_FETCH_HTTP_INSECURE=true if your own proxy handles authentication."
+    );
+  }
   return {
-    host: env["HOST"]?.trim() || "127.0.0.1",
+    host,
+    ...(httpToken !== undefined ? { httpToken } : {}),
+    allowedHosts: parseAllowedHosts(env["SAFE_FETCH_ALLOWED_HOSTS"]),
+    trustProxyHops: parseIntEnv(
+      "SAFE_FETCH_TRUST_PROXY",
+      env["SAFE_FETCH_TRUST_PROXY"],
+      0,
+      {
+        min: 0,
+        max: 10
+      }
+    ),
     port: parseIntEnv("PORT", env["PORT"], 3000, { max: 65_535 }),
     allowedOrigins: parseList(env["SAFE_FETCH_ALLOWED_ORIGINS"]),
     rateLimitMax: parseIntEnv(
