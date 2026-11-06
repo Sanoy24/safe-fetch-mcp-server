@@ -7,6 +7,7 @@ import { DEFAULT_USER_AGENT, type SafeFetchConfig } from "../config.js";
 import { effectivePort, parseAndValidateUrl, UrlPolicyError } from "./urlPolicy.js";
 import { resolveAndPin, type PinnedTarget, type Resolver } from "./resolveAndPin.js";
 import { GuardError } from "./errors.js";
+import { acquireSlot } from "./limiter.js";
 
 export class SafeFetchError extends GuardError {}
 
@@ -407,13 +408,16 @@ export async function fetchWithRedirects(
       if (options.checkHop) {
         await untilAborted(options.checkHop(url), signal, () => timeoutError(cfg));
       }
+      const release = await acquireSlot(url.hostname, cfg, signal, () =>
+        timeoutError(cfg)
+      );
       const response = await performPinnedRequest(
         url,
         pinned,
         cfg,
         signal,
         conditionalHeaders(url, options.conditional)
-      );
+      ).finally(release);
 
       peerIps.push(response.peerIp);
 

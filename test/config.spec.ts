@@ -53,6 +53,8 @@ describe("loadConfig", () => {
       logFormat: "text",
       compatFetchTool: false,
       robots: "respect",
+      maxConcurrent: 16,
+      maxPerHost: 4,
       userAgent: DEFAULT_USER_AGENT
     });
   });
