@@ -157,8 +157,8 @@ Windows), and add the same `mcpServers` entry as Cursor.
 
 Any client that launches stdio servers works. Use the command `npx` with the arguments
 `-y safe-fetch-mcp-server`. Clients that need a URL instead can use Streamable HTTP mode:
-`npx -y safe-fetch-mcp-server --http`, which serves `http://127.0.0.1:3000/mcp`. HTTP mode
-has no authentication, so keep it on loopback.
+`npx -y safe-fetch-mcp-server --http`, which serves `http://127.0.0.1:3000/mcp`. To serve
+beyond this machine, see [HTTP mode on a network](#http-mode-on-a-network).
 
 ### Settings
 
@@ -297,8 +297,9 @@ and treating fetched text as untrusted. Each GitHub release attaches it as
 - **Prompt injection.** Fetched pages are labeled as untrusted data, but a label
   doesn't stop a model from following injected text. Your agent still needs its
   own defenses.
-- **Authentication in HTTP mode.** There is none. Keep HTTP mode on loopback (the
-  default), or put it behind your own authenticating proxy.
+- **Full authentication in HTTP mode.** `SAFE_FETCH_HTTP_TOKEN` is one shared token, with no
+  users, scopes or OAuth, and it doesn't provide TLS. See
+  [HTTP mode on a network](#http-mode-on-a-network).
 - **Tighter egress than "public internet" by default.** Any public host and port is
   reachable unless you set `SAFE_FETCH_ALLOWLIST`, `SAFE_FETCH_ALLOWED_PORTS` or
   `SAFE_FETCH_HTTPS_ONLY`.
@@ -363,7 +364,11 @@ fetch-server CVEs, all enforced in CI.
 | `SAFE_FETCH_TIMEOUT_MS`               | `10000`     | Total deadline per fetch, across DNS, connect, body and all redirects                                               |
 | `SAFE_FETCH_MAX_REDIRECTS`            | `5`         | Redirect hop limit (0–20; 0 disables redirects)                                                                     |
 | `TRANSPORT` / `--http` flag           | stdio       | Switch to Streamable HTTP                                                                                           |
-| `HOST`                                | `127.0.0.1` | HTTP bind address. A non-loopback address prints a warning: HTTP mode has no auth                                   |
+| `HOST`                                | `127.0.0.1` | HTTP bind address. A non-loopback address needs `SAFE_FETCH_HTTP_TOKEN` or `SAFE_FETCH_HTTP_INSECURE=true`          |
+| `SAFE_FETCH_HTTP_TOKEN`               | _(empty)_   | Bearer token required on `POST /mcp`, at least 16 characters                                                        |
+| `SAFE_FETCH_HTTP_INSECURE`            | `false`     | Allow a non-loopback bind with no token, when your own proxy handles authentication                                 |
+| `SAFE_FETCH_ALLOWED_HOSTS`            | _(empty)_   | Extra hostnames accepted in the `Host` header, such as your proxy's public name                                     |
+| `SAFE_FETCH_TRUST_PROXY`              | `0`         | Number of reverse proxies in front of the server, so rate limits apply per client                                   |
 | `PORT`                                | `3000`      | HTTP port                                                                                                           |
 | `SAFE_FETCH_ALLOWED_ORIGINS`          | _(empty)_   | Comma-separated Origin allowlist (CORS) for HTTP mode                                                               |
 | `SAFE_FETCH_RATE_LIMIT_MAX`           | `60`        | Requests per window, per IP (HTTP mode)                                                                             |
@@ -379,6 +384,23 @@ fetch-server CVEs, all enforced in CI.
 
 Invalid values stop the server at startup with a message naming the variable.
 Nothing silently falls back to a default.
+
+### HTTP mode on a network
+
+HTTP mode listens on loopback by default. Binding anywhere else without a token stops the server
+at startup, because anyone who could reach it could make it fetch URLs:
+
+```bash
+HOST=0.0.0.0 \
+SAFE_FETCH_HTTP_TOKEN="$(openssl rand -hex 32)" \
+SAFE_FETCH_ALLOWED_HOSTS=mcp.example.com \
+SAFE_FETCH_TRUST_PROXY=1 \
+npx -y safe-fetch-mcp-server --http
+```
+
+Clients send `Authorization: Bearer <token>`. Put TLS in front of the server, because over plain
+HTTP the token can be read on the network. Set `SAFE_FETCH_TRUST_PROXY` to the exact number of
+proxies: too low and all clients share one rate limit, too high and a client can forge its address.
 
 ## Development
 

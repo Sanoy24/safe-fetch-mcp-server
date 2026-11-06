@@ -1,12 +1,36 @@
-import type { Express } from "express";
+import { createHash, timingSafeEqual } from "node:crypto";
+import type { Express, RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { createServer } from "./server.js";
 import type { HttpTransportConfig } from "./config.js";
 
-const CORS_ALLOWED_HEADERS = "Content-Type, Accept, Mcp-Protocol-Version";
+const CORS_ALLOWED_HEADERS = "Content-Type, Accept, Mcp-Protocol-Version, Authorization";
 const LOCALHOST_HOSTNAMES = ["127.0.0.1", "localhost", "[::1]"];
+
+// Comparing digests keeps the check constant-time and independent of the token's length.
+function tokenMatches(header: string | undefined, expected: string): boolean {
+  const presented = /^Bearer +(\S+)$/i.exec(header ?? "")?.[1];
+  if (presented === undefined) return false;
+  const digest = (value: string): Buffer => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(presented), digest(expected));
+}
+
+function requireToken(expected: string | undefined): RequestHandler {
+  return (req, res, next) => {
+    if (expected === undefined || tokenMatches(req.headers.authorization, expected)) {
+      next();
+      return;
+    }
+    res.setHeader("WWW-Authenticate", "Bearer");
+    res.status(401).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Missing or invalid bearer token." },
+      id: null
+    });
+  };
+}
 
 /**
  * Builds the Express app for Streamable HTTP mode, without binding a port.
@@ -19,10 +43,13 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
   // createMcpExpressApp's implicit host-based auto-detection, so the allow-list
   // stays in force even if HOST is ever pointed at something other than the
   // localhost default.
-  const allowedHosts = LOCALHOST_HOSTNAMES.includes(httpConfig.host)
-    ? LOCALHOST_HOSTNAMES
-    : [httpConfig.host, ...LOCALHOST_HOSTNAMES];
+  const allowedHosts = [
+    ...new Set([httpConfig.host, ...LOCALHOST_HOSTNAMES, ...httpConfig.allowedHosts])
+  ];
   const app = createMcpExpressApp({ host: httpConfig.host, allowedHosts });
+  // The rate limiter keys on req.ip. Hops are counted, never "trust everything", so a
+  // client can't choose its own IP with a forged X-Forwarded-For.
+  if (httpConfig.trustProxyHops > 0) app.set("trust proxy", httpConfig.trustProxyHops);
 
   app.use(
     rateLimit({
@@ -71,7 +98,9 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
     res.status(204).end();
   });
 
-  app.post("/mcp", async (req, res) => {
+  // After the rate limiter, so guesses count against it, and after OPTIONS, because
+  // browsers send preflights without credentials.
+  app.post("/mcp", requireToken(httpConfig.httpToken), async (req, res) => {
     // A fresh server + transport per request: true statelessness, no shared state
     // across concurrent callers (the SDK's documented pattern for stateless mode).
     const server = createServer();
@@ -79,20 +108,22 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
       sessionIdGenerator: undefined,
       enableJsonResponse: true
     });
+    // Registered before handleRequest: a response can finish inside it, and a listener
+    // added afterwards would miss the event and leak this server+transport pair.
+    let closed = false;
+    const cleanUp = (): void => {
+      if (closed) return;
+      closed = true;
+      void transport.close();
+      void server.close();
+    };
+    res.on("close", cleanUp);
     try {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
-      res.on("close", () => {
-        transport.close();
-        void server.close();
-      });
     } catch (err) {
       console.error("Error handling MCP request:", err);
-      // connect()/handleRequest() can throw before the close listener above is
-      // ever registered — without this, a failed request would leak its
-      // server+transport pair instead of being cleaned up.
-      transport.close();
-      void server.close();
+      cleanUp();
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: "2.0",

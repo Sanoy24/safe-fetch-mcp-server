@@ -40,7 +40,7 @@ addresses to the caller, and HTTP-mode Host/Origin bypasses.
 
 Things the threat model lists under
 [Not guaranteed](docs/threat-model.md#not-guaranteed): prompt injection in fetched
-content, missing authentication in HTTP mode, and reachability of public hosts or ports.
+content, HTTP mode run with `SAFE_FETCH_HTTP_INSECURE=true`, and reachability of public hosts or ports.
 Also out of scope: findings that require operator-controlled settings such as
 `SAFE_FETCH_ALLOW_LOCAL=true` reaching private addresses, which is the intended behaviour.
 

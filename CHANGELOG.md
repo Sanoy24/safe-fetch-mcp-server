@@ -29,9 +29,19 @@ this project follows [Semantic Versioning](https://semver.org/).
 - **More addresses blocked:** the Azure platform address `168.63.129.16` and Oracle's legacy
   metadata address `192.0.0.192` are now never allowed, and `192.88.99.0/24`, `3fff::/20` and the
   rest of `2001::/23` are treated as non-public.
+- **HTTP mode authentication:** new optional bearer token, `SAFE_FETCH_HTTP_TOKEN`, compared in
+  constant time and rate-limited.
+
+### Added
+
+- `SAFE_FETCH_ALLOWED_HOSTS`, so HTTP mode works behind a real hostname, which previously got a 403.
+- `SAFE_FETCH_TRUST_PROXY`, so rate limits apply per client behind a reverse proxy.
 
 ### Changed
 
+- **Breaking: HTTP mode won't start on a non-loopback address without `SAFE_FETCH_HTTP_TOKEN`.** It
+  used to print a warning and serve anyway. If your own proxy handles authentication, set
+  `SAFE_FETCH_HTTP_INSECURE=true`.
 - **Images are replaced with their alt text by default** (`[Image: alt]`). Pass `images: "keep"`
   for http(s) images as markdown.
 
@@ -41,6 +51,7 @@ this project follows [Semantic Versioning](https://semver.org/).
   500 look like a security refusal. It now returns the real status. Internal errors no longer say
   "Refused".
 - Paging could split an emoji in two.
+- HTTP mode could leak a per-request server if the response ended before the handler returned.
 - A host with several addresses failed outright if the first was unreachable, for example an IPv6
   answer on a network without IPv6. Every validated address is now tried, so pinning still holds.
 - `<meta charset>` and UTF-16 byte order marks are now honoured when the header names no charset.

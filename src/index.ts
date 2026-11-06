@@ -18,11 +18,15 @@ async function startHttp(): Promise<Server> {
   // The rate limiter for the /mcp endpoint lives inside createHttpApp
   // (httpApp.ts), not here — see SAFE_FETCH_RATE_LIMIT_MAX/_WINDOW_MS.
   const httpConfig = loadHttpConfig();
+  // loadHttpConfig has already refused this without a token or an explicit opt-out.
   if (!isLoopbackHost(httpConfig.host)) {
     console.error(
-      `WARNING: HTTP mode is bound to ${httpConfig.host}, not loopback. This server has no ` +
-        "authentication: anyone who can reach this address can make it fetch URLs. " +
-        "Only do this behind your own authenticating proxy."
+      httpConfig.httpToken === undefined
+        ? `WARNING: HTTP mode is bound to ${httpConfig.host} with no token, because ` +
+            "SAFE_FETCH_HTTP_INSECURE is set. Anyone who can reach this address can make it " +
+            "fetch URLs. Only do this behind your own authenticating proxy."
+        : `HTTP mode is bound to ${httpConfig.host} and requires a bearer token. Use TLS in ` +
+            "front of it: over plain HTTP, the token can be read on the network."
     );
   }
   const app = createHttpApp(httpConfig);
