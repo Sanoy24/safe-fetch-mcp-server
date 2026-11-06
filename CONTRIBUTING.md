@@ -12,8 +12,38 @@ request security. Contributions are judged by that standard first.
 - **Don't weaken a control to make a test or a client work.** Open an issue instead.
 - Found a vulnerability? **Don't open a public issue.** See [`SECURITY.md`](SECURITY.md).
 
-[`CLAUDE.md`](CLAUDE.md) has the full contributor contract (security invariants, MCP and
-TypeScript conventions), including what is out of scope.
+## Security invariants
+
+These are the rules the guard exists to enforce. The attacks behind them are in
+[`docs/threat-model.md`](docs/threat-model.md).
+
+1. Validate the **resolved IP**, never the hostname string. IP encodings are endless, so hostname
+   blocklists fail.
+2. **Pin the connection** to the validated addresses, with one resolution, to defeat DNS rebinding.
+3. **Re-validate every redirect hop** with the full guard. A 302 to `127.0.0.1` must be refused.
+4. Allow only the `http` and `https` schemes.
+5. Reject credentials in URLs (`user:pass@`).
+6. Enforce the response size limit and the total deadline.
+7. Check explicit CIDR ranges, with regression tests. Don't rely on a single third-party
+   IP-classification library: one had an SSRF CVE of its own.
+8. Keep `SAFE_FETCH_ALLOW_LOCAL` off by default. Local access is opt-in only, and cloud metadata
+   is never allowed.
+
+## Code conventions
+
+- **MCP:** use `server.registerTool()`. Give every tool a title, description, annotations, and a
+  strict Zod input schema with `.describe()` on each field. Return `content` and
+  `structuredContent`.
+- **Errors:** return them in the result with `isError: true` and a message that says what to do.
+  Never expose stack traces, internal paths or resolved addresses. Those go in the audit log.
+- **Logging:** use stderr only (`console.error`), because stdout carries MCP traffic in stdio mode.
+- **TypeScript:** strict mode with no `any`. Use `unknown` with type guards, and write explicit
+  `Promise<T>` return types on async functions.
+
+## Out of scope
+
+- A browser or JavaScript-rendering scraper. That's a different kind of tool.
+- A scanner for other MCP servers. This project uses scanners rather than building them.
 
 ## Setup
 

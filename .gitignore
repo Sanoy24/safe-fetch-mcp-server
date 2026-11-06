@@ -18,6 +18,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 
-# Local agent config (personal, not project contract)
-.claude/settings.local.json
-.claude/skills/karpathy-guidelines/
+# Local coding-agent config
+.claude/
+CLAUDE.md

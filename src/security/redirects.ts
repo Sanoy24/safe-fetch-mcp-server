@@ -375,7 +375,7 @@ function conditionalHeaders(
  * Fetches a URL, following redirects manually. Every hop — including the first —
  * goes through parseAndValidateUrl + resolveAndPin again, so a 302 to an internal
  * address is refused exactly like a direct request would be. This loop is the only
- * fetch path; do not add a second one (see CLAUDE.md).
+ * fetch path; do not add a second one (see CONTRIBUTING.md).
  *
  * cfg.timeoutMs is ONE total deadline for the whole operation — DNS, connect,
  * headers and body, across every hop. A per-socket idle timer is not enough: a
