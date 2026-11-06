@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach, type MockInstance } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from "../src/server.js";
 import { runFetchUrl } from "../src/tools/fetchUrl.js";
 import { parseRetryAfter } from "../src/security/redirects.js";

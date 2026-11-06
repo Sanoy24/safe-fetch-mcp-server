@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from "../src/server.js";
 import { loadConfig, type SafeFetchConfig } from "../src/config.js";
 
@@ -59,7 +59,7 @@ describe("compat mode off (default)", () => {
 
     const tools = (await client.listTools()).tools.map((t) => t.name);
     expect(tools).toEqual(["fetch_url"]);
-    await expect(client.listPrompts()).rejects.toThrow();
+    expect(client.getServerCapabilities()?.prompts).toBeUndefined();
     await client.close();
   });
 });

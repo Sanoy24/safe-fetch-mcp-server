@@ -1,8 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { Express, RequestHandler } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { hostHeaderValidation } from "@modelcontextprotocol/express";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServer } from "./server.js";
 import type { HttpTransportConfig } from "./config.js";
 
@@ -40,13 +41,18 @@ function requireToken(expected: string | undefined): RequestHandler {
 export function createHttpApp(httpConfig: HttpTransportConfig): Express {
   // Host-header DNS-rebinding protection (CVE-2025-66414/66416,
   // CVE-2026-35568/35577 class): passed explicitly rather than relying on
-  // createMcpExpressApp's implicit host-based auto-detection, so the allow-list
+  // the SDK's implicit host-based auto-detection, so the allow-list
   // stays in force even if HOST is ever pointed at something other than the
   // localhost default.
   const allowedHosts = [
     ...new Set([httpConfig.host, ...LOCALHOST_HOSTNAMES, ...httpConfig.allowedHosts])
   ];
-  const app = createMcpExpressApp({ host: httpConfig.host, allowedHosts });
+  // Composed here rather than with createMcpExpressApp: the SDK's Origin check repeats the
+  // caller's Origin in its error, and the check below doesn't. Host comes first, so a
+  // request for the wrong host isn't even parsed.
+  const app = express();
+  app.use(hostHeaderValidation(allowedHosts));
+  app.use(express.json());
   // The rate limiter keys on req.ip. Hops are counted, never "trust everything", so a
   // client can't choose its own IP with a forged X-Forwarded-For.
   if (httpConfig.trustProxyHops > 0) app.set("trust proxy", httpConfig.trustProxyHops);
@@ -98,32 +104,19 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
     res.status(204).end();
   });
 
+  // A fresh server for every request, for both protocol eras: 2026-07-28 is stateless by
+  // design, and 2025-era clients get the SDK's stateless fallback. The SDK closes each one.
+  const handleMcp = toNodeHandler(
+    createMcpHandler(() => createServer(), {
+      onerror: (err) => console.error("MCP transport error:", err.message)
+    })
+  );
+
   // After the rate limiter, so guesses count against it, and after OPTIONS, because
   // browsers send preflights without credentials.
-  app.post("/mcp", requireToken(httpConfig.httpToken), async (req, res) => {
-    // A fresh server + transport per request: true statelessness, no shared state
-    // across concurrent callers (the SDK's documented pattern for stateless mode).
-    const server = createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true
-    });
-    // Registered before handleRequest: a response can finish inside it, and a listener
-    // added afterwards would miss the event and leak this server+transport pair.
-    let closed = false;
-    const cleanUp = (): void => {
-      if (closed) return;
-      closed = true;
-      void transport.close();
-      void server.close();
-    };
-    res.on("close", cleanUp);
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    } catch (err) {
+  app.post("/mcp", requireToken(httpConfig.httpToken), (req, res) => {
+    handleMcp(req, res, req.body).catch((err: unknown) => {
       console.error("Error handling MCP request:", err);
-      cleanUp();
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: "2.0",
@@ -131,7 +124,7 @@ export function createHttpApp(httpConfig: HttpTransportConfig): Express {
           id: null
         });
       }
-    }
+    });
   });
 
   const respondMethodNotAllowed = (res: {

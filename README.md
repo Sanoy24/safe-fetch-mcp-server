@@ -155,7 +155,7 @@ Windows), and add the same `mcpServers` entry as Cursor.
 
 ### Other MCP clients
 
-Any client that launches stdio servers works. Use the command `npx` with the arguments
+Any client that launches stdio servers works, on the 2026-07-28 MCP protocol or an earlier one. Use the command `npx` with the arguments
 `-y safe-fetch-mcp-server`. Clients that need a URL instead can use Streamable HTTP mode:
 `npx -y safe-fetch-mcp-server --http`, which serves `http://127.0.0.1:3000/mcp`. To serve
 beyond this machine, see [HTTP mode on a network](#http-mode-on-a-network).
